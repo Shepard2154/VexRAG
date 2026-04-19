@@ -1,0 +1,18 @@
+---
+description: Python coding rules inspired by Fluent Python
+globs: "**/*.py"
+alwaysApply: false
+---
+
+# Python Style (Fluent Python)
+
+- Write idiomatic Python: clear, explicit, and concise.
+- Prefer core data model features (`__iter__`, `__len__`, `__repr__`, `__enter__`/`__exit__`) over ad-hoc helper APIs when appropriate.
+- Favor protocols and duck typing over deep inheritance trees.
+- Use EAFP style (`try`/`except`) when it improves readability and avoids redundant checks.
+- Prefer comprehensions and generator expressions to verbose loops when they stay readable.
+- Use standard library tools (`dataclasses`, `collections`, `pathlib`, `itertools`, `functools`) before custom utilities.
+- Keep functions small and composable; avoid side effects in utility functions unless required.
+- Use type hints where they clarify public contracts; avoid noisy or redundant annotations.
+- Represent domain objects with meaningful types instead of loose dictionaries when possible.
+- Avoid Java-style patterns in Python code (excessive getters/setters, unnecessary classes, boilerplate-heavy code).

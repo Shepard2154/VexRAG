@@ -1,0 +1,1 @@
+An Oracle Vector Store is not a separate silo; it is a capability of the converged database that treats vectors as a native data type.

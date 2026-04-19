@@ -1,0 +1,21 @@
+{"id":1,"question":"What does Retrieval Augmented Generation (RAG) combine?","answer":"Neural language models with secure retrieval systems in a hybrid AI approach."}
+{"id":2,"question":"How does the Oracle RAG approach differ from traditional vector stores regarding data security?","answer":"The Oracle strategy brings AI vector search directly to the database instead of moving data to external vector stores, so sensitive data stays within the Oracle governance boundary."}
+{"id":3,"question":"Where does sensitive corporate data remain in this methodology?","answer":"It never leaves the secure governance boundary of the Oracle environment."}
+{"id":4,"question":"What sits at the core of this architecture?","answer":"Oracle Database 23ai, which integrates vector search natively alongside relational data."}
+{"id":5,"question":"What does Oracle Integrated Vectorization mean?","answer":"Vectors and business data coexist in real-time without requiring the same ETL replication as external platforms."}
+{"id":6,"question":"How does the retrieval system fetch relevant documents?","answer":"It uses Oracle AI Vector Search without the latency of external API calls."}
+{"id":7,"question":"What happens when a query is received in the Oracle system?","answer":"It performs a similarity search on resident data, ensuring zero data leakage."}
+{"id":8,"question":"What does the component that merges retrieval and generation ensure?","answer":"The final response is grounded in the organization's single source of truth."}
+{"id":9,"question":"What complexity is removed by keeping data in Oracle?","answer":"Synchronizing a separate vector database with the operational database."}
+{"id":10,"question":"What does the integrator do with retrieved Oracle data?","answer":"It incorporates it into the final text output, enhancing accuracy and compliance."}
+{"id":11,"question":"For which industries is this approach especially critical?","answer":"Finance, healthcare, and government, where data sovereignty is non-negotiable."}
+{"id":12,"question":"What does Oracle AI Vector Search support for corporate workloads?","answer":"Various distance metrics and indexing methods tailored for high performance."}
+{"id":13,"question":"How can a Multi-Agent System use the Oracle database?","answer":"By querying it directly for both structured (SQL) and unstructured (vector) data."}
+{"id":14,"question":"Why can responses be more accurate than with stale external indexes?","answer":"They are influenced by real-time corporate data."}
+{"id":15,"question":"How does RAG in Oracle stay up to date when records change?","answer":"As soon as a record is updated, it is immediately available for retrieval."}
+{"id":16,"question":"What problem do external stores like Pinecone or FAISS often exhibit?","answer":"Stale data compared to architectures that update in the database."}
+{"id":17,"question":"What do nuanced answers draw on?","answer":"The company's actual operational reality from Oracle's secure repository."}
+{"id":18,"question":"How is the challenge of a separate retrievable-text database addressed?","answer":"By converging vectors and data into one Oracle platform."}
+{"id":19,"question":"Which Oracle security features apply to vector retrieval?","answer":"Row-Level Security and auditing, among other robust database security features."}
+{"id":20,"question":"What does Oracle-based RAG represent in summary?","answer":"The maturity of AI: combining generative technologies with enterprise security and reliability."}
+{"id":21,"question":"How is an Oracle Vector Store described relative to a separate silo?","answer":"It is a capability of the converged database that treats vectors as a native data type."}

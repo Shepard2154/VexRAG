@@ -1,0 +1,16 @@
+{
+  "dataset": "benchmark.jsonl",
+  "contexts_dir": "contexts",
+  "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+  "top_k": 2,
+  "host": "0.0.0.0",
+  "port": 9003,
+  "llm": {
+    "timeout_seconds": 30,
+    "ollama": {
+      "base_url": "http://localhost:11434",
+      "model": "llama3:8b",
+      "temperature": 0.0
+    }
+  }
+}

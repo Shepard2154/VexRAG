@@ -1,0 +1,1 @@
+The Oracle strategy for RAG represents a paradigm shift: instead of moving data to external vector stores, it brings AI vector search directly to the database.

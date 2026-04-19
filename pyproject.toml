@@ -1,0 +1,102 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vexrag"
+version = "0.1.0"
+description = "Red Team testing for functional correctness of RAG systems under attack conditions."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "poethepoet>=0.29.0",
+    "ruff>=0.8.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["vexrag*"]
+
+[tool.poe.tasks]
+lint = "ruff check ."
+format = "ruff format ."
+lint-vexrag = "ruff check vexrag/"
+
+[tool.poe.tasks.check]
+help = "Run ruff check and verify formatting (no writes)"
+shell = "ruff check . && ruff format --check ."
+
+[tool.poe.tasks.fix]
+help = "Auto-fix ruff issues and format the tree"
+shell = "ruff check --fix . && ruff format ."
+
+[tool.poe.tasks.fix-vexrag]
+help = "Auto-fix and format only the vexrag package"
+shell = "ruff check --fix vexrag/ && ruff format vexrag/"
+
+[tool.poe.tasks.install-dev]
+help = "Editable install with dev extras (run after cloning)"
+shell = "pip install -e \".[dev]\""
+
+[tool.poe.tasks.lint-file]
+help = "Lint a single file"
+cmd = "ruff check \"${file}\""
+args = [{ name = "file", positional = true, required = true, help = "Path to a Python file" }]
+
+[tool.poe.tasks.fix-file]
+help = "Auto-fix and format a single file"
+shell = "ruff check --fix \"$file\" && ruff format \"$file\""
+args = [{ name = "file", positional = true, required = true, help = "Path to a Python file" }]
+
+[tool.ruff]
+# Maximum line length
+line-length = 88
+
+# Target Python version
+target-version = "py311"
+
+# Excluded files and directories
+exclude = [
+    ".git",
+    ".ruff_cache",
+    "__pycache__",
+    "venv",
+    "build",
+    "dist",
+]
+
+[tool.ruff.lint]
+# Enable all rules by default
+select = ["ALL"]
+# Ignore rules that are too noisy for this repo
+ignore = [
+    "E501",  # Line too long
+    "E731",  # Do not assign a lambda expression
+    "ANN401", # Dynamically typed expressions
+    "S101",   # Use of assert
+    "S603",   # subprocess call - check for execution of untrusted input
+    "S607",   # Starting a process with a partial executable path
+    "COM812", # Trailing comma missing (conflicts with formatter)
+    "D203",   # incorrect-blank-line-before-class
+    "D213",   # multi-line-summary-second-line
+]
+
+# Auto-fix
+fixable = ["ALL"]
+unfixable = []
+
+# Imports
+[tool.ruff.lint.isort]
+known-first-party = ["vexrag"]
+
+# Formatting
+[tool.ruff.format]
+# Use double quotes
+quote-style = "double"
+# Use spaces for indentation
+indent-style = "space"
+# Line endings for formatting
+line-ending = "auto"

@@ -1,0 +1,1 @@
+When a query is received, the Oracle system performs a similarity search directly on the resident data, ensuring zero data leakage.

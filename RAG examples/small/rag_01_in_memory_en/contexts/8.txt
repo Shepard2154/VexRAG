@@ -1,0 +1,1 @@
+This component merges the retrieval outputs with the generative model, ensuring the final response is grounded in the organization's single source of truth.

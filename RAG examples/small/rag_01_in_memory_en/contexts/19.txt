@@ -1,0 +1,1 @@
+Furthermore, Oracle's robust security features (Row-Level Security, auditing) automatically apply to the vector retrieval process.

@@ -1,0 +1,10 @@
+---
+description: Keep README focused on essentials
+alwaysApply: true
+---
+
+# README Style
+
+- Write README files as concise operational guides.
+- Focus on essentials: what it is, how to run, required config, and key endpoints.
+- Avoid deep implementation details unless required for usage.

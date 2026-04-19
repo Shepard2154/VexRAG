@@ -1,0 +1,9 @@
+---
+description: Avoid meta-commentary about where LLM prompts live (reads oddly out of context)
+alwaysApply: true
+---
+
+# Prompt placement and documentation
+
+- Do not add comments, docstrings, or README notes that explain that attack prompts are "not web service config" or similar placement meta. Outside full architectural context this sounds confusing.
+- Put prompt text only in the appropriate attack/algorithm modules; document paths briefly if needed (e.g. `vexrag/attack_algorithms/`) without contrasting with other layers unless the doc is explicitly about project layout.
