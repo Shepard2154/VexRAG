@@ -43,7 +43,9 @@ class LLMClient:
         return self._generate_ollama(question, contexts)
 
     def _generate_ollama(self, question: str, contexts: list[str]) -> str:
-        base_url = str(self.ollama.get("base_url", "http://localhost:11434")).rstrip("/")
+        base_url = str(self.ollama.get("base_url", "http://localhost:11434")).rstrip(
+            "/"
+        )
         model = self.ollama.get("model")
         if not model:
             raise RuntimeError("llm.ollama.model is required in config.json")
@@ -60,6 +62,7 @@ class LLMClient:
         )
         response.raise_for_status()
         return str(response.json().get("response", "")).strip()
+
 
 class SmallRAG:
     """Tiny in-memory RAG with benchmark-like QA data."""
@@ -89,7 +92,9 @@ class SmallRAG:
             return vector
         return vector / norm
 
-    def retrieve(self, query: str, top_k: int = 2) -> list[tuple[BenchmarkExample, float]]:
+    def retrieve(
+        self, query: str, top_k: int = 2
+    ) -> list[tuple[BenchmarkExample, float]]:
         query_vec = self._embed_query(query)
         scores = self.context_vectors @ query_vec
         top_indices = np.argsort(scores)[::-1][:top_k]
