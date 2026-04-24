@@ -12,6 +12,7 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = [
+    "pre-commit>=3.8.0",
     "poethepoet>=0.29.0",
     "ruff>=0.8.0",
 ]
@@ -69,20 +70,11 @@ exclude = [
 ]
 
 [tool.ruff.lint]
-# Enable all rules by default
-select = ["ALL"]
-# Ignore rules that are too noisy for this repo
-ignore = [
-    "E501",  # Line too long
-    "E731",  # Do not assign a lambda expression
-    "ANN401", # Dynamically typed expressions
-    "S101",   # Use of assert
-    "S603",   # subprocess call - check for execution of untrusted input
-    "S607",   # Starting a process with a partial executable path
-    "COM812", # Trailing comma missing (conflicts with formatter)
-    "D203",   # incorrect-blank-line-before-class
-    "D213",   # multi-line-summary-second-line
-]
+# Start with a pragmatic baseline: errors, pyflakes, import sorting,
+# bugbear, and pyupgrade checks.
+select = ["E", "F", "I", "B", "UP"]
+# Formatter handles line-length and trailing commas.
+ignore = ["E501", "COM812"]
 
 # Auto-fix
 fixable = ["ALL"]
