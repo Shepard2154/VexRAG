@@ -1,31 +1,28 @@
-from vexrag.core.evaluation import (
-    CosineSimilarityMetric,
+from vexrag.core.evaluation.llm_judge import (
+    JudgeResponse,
+    JudgeResponseValidationError,
+    LLMJudgeEvaluator,
+    validate_judge_response,
+)
+from vexrag.core.evaluation.protocols import (
     EmbeddingClientProtocol,
     EvaluationInput,
     EvaluationResult,
     EvaluationStrategyProtocol,
     JudgeLLMProtocol,
     JudgePromptBuilderProtocol,
-    JudgeResponse,
-    JudgeResponseValidationError,
-    LLMJudgeEvaluator,
-    SemanticSimilarityEvaluator,
     SimilarityMetricProtocol,
-    validate_judge_response,
 )
-from vexrag.core.retrieval import RetrievalBackend
-from vexrag.core.scan import ScanVerdict
-from vexrag.core.target import (
-    TargetSystemAdapterProtocol,
-    TargetSystemQuery,
-    TargetSystemResponse,
+from vexrag.core.evaluation.semantic_similarity import (
+    CosineSimilarityMetric,
+    SemanticSimilarityEvaluator,
 )
 
 __all__ = [
     # Evaluation types
     "EvaluationInput",
     "EvaluationResult",
-    # Evaluation protocols
+    # Protocols
     "EmbeddingClientProtocol",
     "EvaluationStrategyProtocol",
     "JudgeLLMProtocol",
@@ -39,12 +36,4 @@ __all__ = [
     # Semantic similarity evaluation
     "CosineSimilarityMetric",
     "SemanticSimilarityEvaluator",
-    # Retrieval
-    "RetrievalBackend",
-    # Scan
-    "ScanVerdict",
-    # Target system
-    "TargetSystemAdapterProtocol",
-    "TargetSystemQuery",
-    "TargetSystemResponse",
 ]
