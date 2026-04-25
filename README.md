@@ -10,8 +10,13 @@ A toolkit for assessing the **functional correctness** of retrieval-augmented ge
 
 Canonical checklist: [notes/TODO.md](notes/TODO.md).
 
-## In Progress
+## Done
 - [x] Small RAG (in-memory)
+- [x] PoisonedRAG target scan pipeline with core target, scan, and evaluation contracts
+- [x] Core package facade exports clarified for shared APIs
+
+## In Progress
+- [ ] PoisonedRAG through Core and CLI: configurable HTTP target adapter, YAML-driven scan command, evaluation strategy wiring, and `rag_01_in_memory_en` usage example
 - [ ] Medium RAG with Chroma DB
 
 ## Next
