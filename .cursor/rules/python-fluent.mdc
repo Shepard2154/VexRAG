@@ -15,4 +15,5 @@ alwaysApply: false
 - Keep functions small and composable; avoid side effects in utility functions unless required.
 - Use type hints where they clarify public contracts; avoid noisy or redundant annotations.
 - Represent domain objects with meaningful types instead of loose dictionaries when possible.
+- In package facades, write `__all__` as a single explicit list grouped by short section comments; avoid helper constants used only to assemble exports.
 - Avoid Java-style patterns in Python code (excessive getters/setters, unnecessary classes, boilerplate-heavy code).
