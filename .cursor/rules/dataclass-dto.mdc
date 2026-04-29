@@ -1,0 +1,12 @@
+---
+description: Keep Python dataclasses limited to DTO-style data containers
+globs: "**/*.py"
+alwaysApply: false
+---
+
+# Dataclass DTOs
+
+- Use `@dataclass` for DTO-style containers: named fields, defaults, and structured data transfer.
+- Dataclasses may validate their own field invariants in `__post_init__`.
+- Do not put business logic, IO, network calls, or service methods inside dataclasses.
+- If behavior is needed, keep the dataclass as a config/input/output object and move behavior into a regular class or function.

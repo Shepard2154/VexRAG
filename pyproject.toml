@@ -8,7 +8,12 @@ version = "0.1.0"
 description = "Red Team testing for functional correctness of RAG systems under attack conditions."
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "PyYAML",
+]
+
+[project.scripts]
+vx = "vexrag.cli.main:main"
 
 [project.optional-dependencies]
 dev = [

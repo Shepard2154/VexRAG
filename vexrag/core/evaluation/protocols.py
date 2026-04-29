@@ -26,6 +26,7 @@ class EvaluationResult:
     reason: str | None = None
     raw_response: str | Mapping[str, Any] | None = None
     warnings: tuple[str, ...] = ()
+    metadata: Mapping[str, Any] = field(default_factory=dict)
 
 
 class EvaluationStrategyProtocol(Protocol):

@@ -8,6 +8,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Keep this port in sync with "port" in config.json.
-EXPOSE 9003
+EXPOSE 8080
 
 CMD ["python", "small_rag.py"]

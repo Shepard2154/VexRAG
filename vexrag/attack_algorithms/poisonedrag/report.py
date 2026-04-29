@@ -14,6 +14,7 @@ class PoisonedRAGCaseResult:
     expected_incorrect_answer: str
     system_response: TargetSystemResponse
     evaluation: EvaluationResult
+    case_id: str | None = None
     run_index: int = 1
 
     @property
@@ -29,9 +30,6 @@ class PoisonedRAGCaseResult:
 class PoisonedRAGScanReport:
     """Machine-readable report for a PoisonedRAG scan."""
 
-    query: str
-    correct_answer: str
-    incorrect_answer: str
     verdict: ScanVerdict
     cases: tuple[PoisonedRAGCaseResult, ...]
     generated_adversarial_texts: tuple[str, ...]

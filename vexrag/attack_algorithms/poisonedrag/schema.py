@@ -10,6 +10,7 @@ class PoisonedRAGRequest:
     """Input contract for generating PoisonedRAG candidates."""
 
     query: str
+    case_id: str | None = None
     correct_answer: str | None = None
     target_incorrect_answer: str | None = None
     adv_per_query: int = 3

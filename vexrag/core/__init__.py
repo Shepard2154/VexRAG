@@ -13,9 +13,26 @@ from vexrag.core.evaluation import (
     SimilarityMetricProtocol,
     validate_judge_response,
 )
-from vexrag.core.retrieval import RetrievalBackend
+from vexrag.core.providers import (
+    OllamaEmbeddingClient,
+    OllamaJudgeClient,
+    ProviderConfigError,
+    ProviderServiceError,
+    build_embedding_client,
+    build_judge_client,
+)
+from vexrag.core.retrieval import (
+    CorpusPoisoningAdapterProtocol,
+    CorpusPoisoningError,
+    FileTextCorpusPoisoningAdapter,
+    RetrievalBackend,
+)
 from vexrag.core.scan import ScanVerdict
 from vexrag.core.target import (
+    HTTPResponsePaths,
+    HTTPTargetSystemAdapter,
+    HTTPTargetSystemAdapterConfig,
+    HTTPTargetSystemAdapterError,
     TargetSystemAdapterProtocol,
     TargetSystemQuery,
     TargetSystemResponse,
@@ -39,11 +56,25 @@ __all__ = [
     # Semantic similarity evaluation
     "CosineSimilarityMetric",
     "SemanticSimilarityEvaluator",
+    # Providers
+    "OllamaEmbeddingClient",
+    "OllamaJudgeClient",
+    "ProviderConfigError",
+    "ProviderServiceError",
+    "build_embedding_client",
+    "build_judge_client",
     # Retrieval
+    "CorpusPoisoningAdapterProtocol",
+    "CorpusPoisoningError",
+    "FileTextCorpusPoisoningAdapter",
     "RetrievalBackend",
     # Scan
     "ScanVerdict",
     # Target system
+    "HTTPResponsePaths",
+    "HTTPTargetSystemAdapter",
+    "HTTPTargetSystemAdapterConfig",
+    "HTTPTargetSystemAdapterError",
     "TargetSystemAdapterProtocol",
     "TargetSystemQuery",
     "TargetSystemResponse",

@@ -21,12 +21,30 @@ pip install -r requirements.txt
 python3 small_rag.py
 ```
 
-Default service URL: `http://localhost:9003`  
-Answer endpoint: `POST /model/with-context` — response includes `answer` and `contexts` (retrieved passages).
+Default service URL: `http://localhost:8080`  
+Answer endpoint: `POST /model/context-based-response` — response includes `answer` and `contexts` (retrieved passages).
 
 ## LLM (Ollama)
 
-Configure `llm.ollama` in `config.json` (`base_url`, `model`, `temperature`). Ollama must be running and the model pulled locally.
+By default, the app and scan use Ollama at `http://localhost:11434` with `llama3:8b`. Ollama must be running and the model pulled locally.
+
+You can override the app config with environment variables:
+
+```bash
+OLLAMA_BASE_URL=http://localhost:11434 \
+OLLAMA_MODEL=llama3:8b \
+python3 small_rag.py
+```
+
+## VexRAG Scan
+
+Start the demo service first, then run the VexRAG scan from the repository root:
+
+```bash
+vx scan --config "RAG examples/small/rag_01_in_memory_en/vexrag-poisonedrag-scan.yaml"
+```
+
+The included scan config targets `http://localhost:8080/model/context-based-response`, runs the inline case plus cases from `poisonedrag-cases.yaml`, and uses Ollama for attack generation and LLM-as-a-Judge evaluation. With the default config, make sure `llama3:8b` is available locally or change the model fields in both config files.
 
 ## Docker Run
 
@@ -34,10 +52,11 @@ Inside a container, `localhost` is not the host. If Ollama runs on the machine (
 
 ```bash
 docker build -t rag-01-in-memory-en .
-docker run --rm -p 9003:9003 \
+docker run --rm -p 8080:8080 \
   --add-host=host.docker.internal:host-gateway \
   -e OLLAMA_BASE_URL=http://host.docker.internal:11434 \
   rag-01-in-memory-en
 ```
 
 On Linux, `host.docker.internal` requires `--add-host=host.docker.internal:host-gateway` (shown above). Override `OLLAMA_BASE_URL` if Ollama listens elsewhere.
+After the container starts, run the VexRAG scan from the repository root with `vexrag-poisonedrag-scan.yaml`. The scan runs on the host, so it keeps using `http://localhost:11434` for Ollama.

@@ -1,3 +1,6 @@
+from vexrag.attack_algorithms.poisonedrag.evaluation import (
+    PoisonedRAGJudgePromptBuilder,
+)
 from vexrag.attack_algorithms.poisonedrag.generator import (
     CorrectAnswerProviderProtocol,
     LLMClientProtocol,
@@ -27,6 +30,8 @@ from vexrag.attack_algorithms.poisonedrag.schema import (
 from vexrag.attack_algorithms.poisonedrag.validators import PoisonedRAGValidationError
 
 __all__ = [
+    # Evaluation
+    "PoisonedRAGJudgePromptBuilder",
     # Generator
     "CorrectAnswerProviderProtocol",
     "LLMClientProtocol",

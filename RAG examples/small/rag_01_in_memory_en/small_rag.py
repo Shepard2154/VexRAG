@@ -23,8 +23,11 @@ class LLMClient:
     """LLM client with Ollama interface."""
 
     def __init__(self, config: dict) -> None:
-        self.timeout_seconds = int(config.get("timeout_seconds", 30))
-        self.ollama = config.get("ollama", {})
+        timeout_seconds = config["timeout_seconds"]
+        self.timeout_seconds = None if timeout_seconds is None else int(timeout_seconds)
+        if self.timeout_seconds is not None and self.timeout_seconds <= 0:
+            raise RuntimeError("llm.timeout_seconds must be greater than 0")
+        self.ollama = config["ollama"]
 
     def _build_prompt(self, question: str, contexts: list[str]) -> str:
         joined_context = "\n\n".join(contexts)
@@ -43,9 +46,7 @@ class LLMClient:
         return self._generate_ollama(question, contexts)
 
     def _generate_ollama(self, question: str, contexts: list[str]) -> str:
-        base_url = str(self.ollama.get("base_url", "http://localhost:11434")).rstrip(
-            "/"
-        )
+        base_url = str(self.ollama["base_url"]).rstrip("/")
         model = self.ollama.get("model")
         if not model:
             raise RuntimeError("llm.ollama.model is required in config.json")
@@ -53,7 +54,7 @@ class LLMClient:
             "model": str(model),
             "prompt": self._build_prompt(question, contexts),
             "stream": False,
-            "options": {"temperature": float(self.ollama.get("temperature", 0.0))},
+            "options": {"temperature": float(self.ollama["temperature"])},
         }
         response = requests.post(
             f"{base_url}/api/generate",
@@ -72,10 +73,17 @@ class SmallRAG:
         examples: list[BenchmarkExample],
         model_name: str,
         llm_client: LLMClient | None = None,
+        extra_contexts_dir: Path | None = None,
     ) -> None:
-        self.examples = examples
+        self._base_examples = list(examples)
+        self.extra_contexts_dir = extra_contexts_dir
+        self._extra_context_files: tuple[Path, ...] = ()
         self.embedding = HuggingFaceEmbeddings(model_name=model_name)
         self.llm_client = llm_client
+        self._set_examples(self._base_examples)
+
+    def _set_examples(self, examples: list[BenchmarkExample]) -> None:
+        self.examples = examples
         self.contexts = [example.context for example in examples]
         self.context_vectors = self._embed_documents(self.contexts)
 
@@ -103,6 +111,7 @@ class SmallRAG:
     def answer_with_contexts(self, query: str, top_k: int = 2) -> tuple[str, list[str]]:
         if not self.llm_client:
             raise RuntimeError("LLM client is not configured.")
+        self._reload_extra_contexts()
         retrieved = self.retrieve(query, top_k=top_k)
         retrieved_examples = [item for item, _score in retrieved]
         context_texts = [item.context for item in retrieved_examples]
@@ -115,6 +124,33 @@ class SmallRAG:
     def answer(self, query: str, top_k: int = 2) -> str:
         text, _ = self.answer_with_contexts(query, top_k=top_k)
         return text
+
+    def _reload_extra_contexts(self) -> None:
+        if self.extra_contexts_dir is None:
+            return
+        context_files = tuple(sorted(self.extra_contexts_dir.glob("poisonedrag_*.txt")))
+        if context_files == self._extra_context_files:
+            return
+
+        extra_examples: list[BenchmarkExample] = []
+        for offset, path in enumerate(context_files, start=1):
+            try:
+                context = path.read_text(encoding="utf-8").strip()
+            except OSError:
+                continue
+            if not context:
+                continue
+            extra_examples.append(
+                BenchmarkExample(
+                    sample_id=-offset,
+                    question="",
+                    answer="",
+                    context=context,
+                )
+            )
+
+        self._extra_context_files = context_files
+        self._set_examples([*self._base_examples, *extra_examples])
 
 
 class RAGRequest(BaseModel):
@@ -145,8 +181,8 @@ def load_examples(path: Path, contexts_dir: Path) -> list[BenchmarkExample]:
 def create_app(rag: SmallRAG, top_k: int) -> FastAPI:
     app = FastAPI(title="Small In-Memory RAG")
 
-    @app.post("/model/with-context")
-    def model_with_context(request: RAGRequest) -> dict[str, str | list[str]]:
+    @app.post("/model/context-based-response")
+    def context_based_response(request: RAGRequest) -> dict[str, str | list[str]]:
         try:
             answer_text, context_texts = rag.answer_with_contexts(
                 request.query, top_k=top_k
@@ -163,49 +199,43 @@ def create_app(rag: SmallRAG, top_k: int) -> FastAPI:
 
 
 def load_config(config_path: Path) -> dict:
-    defaults = {
-        "dataset": "benchmark.jsonl",
-        "contexts_dir": "contexts",
-        "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
-        "top_k": 2,
-        "host": "0.0.0.0",
-        "port": 9003,
-        "llm": {
-            "timeout_seconds": 30,
-            "ollama": {
-                "base_url": "http://localhost:11434",
-                "model": "llama3:8b",
-                "temperature": 0.0,
-            },
-        },
-    }
-    if not config_path.exists():
-        return defaults
-
     with config_path.open(encoding="utf-8") as file:
-        loaded = json.load(file)
-    return {**defaults, **loaded}
+        config = json.load(file)
+    return apply_env_overrides(config)
+
+
+def apply_env_overrides(config: dict) -> dict:
+    if ollama_base_url := os.getenv("OLLAMA_BASE_URL"):
+        config["llm"]["ollama"]["base_url"] = ollama_base_url
+    if ollama_model := os.getenv("OLLAMA_MODEL"):
+        config["llm"]["ollama"]["model"] = ollama_model
+    if ollama_temperature := os.getenv("OLLAMA_TEMPERATURE"):
+        config["llm"]["ollama"]["temperature"] = float(ollama_temperature)
+    if llm_timeout := os.getenv("LLM_TIMEOUT_SECONDS"):
+        config["llm"]["timeout_seconds"] = int(llm_timeout)
+    if host := os.getenv("RAG_HOST"):
+        config["host"] = host
+    if port := os.getenv("PORT", os.getenv("RAG_PORT")):
+        config["port"] = int(port)
+    return config
 
 
 BASE_DIR = Path(__file__).parent
 CONFIG = load_config(BASE_DIR / "config.json")
-if os.environ.get("OLLAMA_BASE_URL"):
-    llm_cfg = CONFIG.setdefault("llm", {})
-    ollama_cfg = llm_cfg.setdefault("ollama", {})
-    ollama_cfg["base_url"] = str(os.environ["OLLAMA_BASE_URL"]).rstrip("/")
 DEFAULT_DATASET = BASE_DIR / str(CONFIG["dataset"])
 DEFAULT_CONTEXTS_DIR = BASE_DIR / str(CONFIG["contexts_dir"])
 DEFAULT_EMBEDDING_MODEL = str(CONFIG["embedding_model"])
 DEFAULT_TOP_K = int(CONFIG["top_k"])
 DEFAULT_HOST = str(CONFIG["host"])
 DEFAULT_PORT = int(CONFIG["port"])
-LLM_CLIENT = LLMClient(CONFIG.get("llm", {}))
+LLM_CLIENT = LLMClient(CONFIG["llm"])
 
 _examples = load_examples(DEFAULT_DATASET, DEFAULT_CONTEXTS_DIR)
 _rag = SmallRAG(
     _examples,
     model_name=DEFAULT_EMBEDDING_MODEL,
     llm_client=LLM_CLIENT,
+    extra_contexts_dir=DEFAULT_CONTEXTS_DIR,
 )
 app = create_app(_rag, top_k=DEFAULT_TOP_K)
 
