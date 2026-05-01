@@ -47,8 +47,8 @@ evaluation:
 scan:
   repetitions: 1
   attack_success_rate_threshold: 0.5
-  override_contexts: true
+  override_contexts: false
   corpus_poisoning:
     backend: file_text
     path: ./contexts
-    cleanup: true
+    cleanup: false

@@ -153,6 +153,12 @@ class PoisonedRAGGenerator:
             limit=request.adv_per_query,
             seed=request.seed,
         )
+        query_prefix = request.query.strip()
+        if query_prefix:
+            adv_texts = [
+                f"{query_prefix}. {text}" if not text.startswith(query_prefix) else text
+                for text in adv_texts
+            ]
         if len(adv_texts) < request.adv_per_query:
             warnings.append(
                 "Generated fewer adversarial texts than requested after validation."
