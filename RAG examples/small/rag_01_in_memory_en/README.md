@@ -41,14 +41,40 @@ python3 small_rag.py
 Start the demo service first, then run the VexRAG scan from the repository root:
 
 ```bash
-vx scan --config "RAG examples/small/rag_01_in_memory_en/vexrag-poisonedrag-llm-judge-ollama-llama3-8b.yaml"
+vx scan --config "RAG examples/small/rag_01_in_memory_en/scan_configs_examples/vexrag-poisonedrag-llm-judge-ollama-llama3-8b.yaml"
 ```
 
-The included scan configs target `http://localhost:8080/model/context-based-response` and run the inline case plus cases from `poisonedrag-cases.yaml`.
-- `vexrag-poisonedrag-llm-judge-ollama-llama3-8b.yaml` uses `evaluation.strategy: llm_judge`.
-- `vexrag-poisonedrag-semantic-similarity-ollama-llama3-8b.yaml` uses `evaluation.strategy: semantic_similarity` and enables deterministic-style scoring.
-- `vexrag-poisonedrag-llm-judge-vllm-qwen3-30b-a3b-instruct-2507.yaml` uses vLLM (`Qwen/Qwen3-30B-A3B-Instruct-2507`) via OpenAI-compatible API.
-With `scan.corpus_poisoning.path: ./contexts`, VexRAG writes generated poisoned texts as `poisonedrag_*.txt` files into `contexts/` for `file_text` corpus poisoning. Set `scan.corpus_poisoning.cleanup: true` to remove these poisoned files after each scan case. With the default configs, make sure `llama3:8b` is available locally or change the model fields in both config files.
+The included scan configs are kept in `scan_configs_examples/` and target `http://localhost:8080/model/context-based-response`.
+- `scan_configs_examples/vexrag-poisonedrag-llm-judge-ollama-llama3-8b.yaml` uses `evaluation.strategy: llm_judge`.
+- `scan_configs_examples/vexrag-poisonedrag-llm-judge-vllm-gemma-3-27b-it-original.yaml` is the Gemma baseline (`poisoning_style: original`).
+- `scan_configs_examples/vexrag-poisonedrag-llm-judge-vllm-gemma-3-27b-it-aggressive.yaml` keeps the same setup with stronger injection (`poisoning_style: aggressive`).
+- `scan_configs_examples/vexrag-poisonedrag-semantic-similarity-vllm-gemma-3-27b-it-original.yaml` uses `evaluation.strategy: semantic_similarity`.
+- `scan_configs_examples/vexrag-poisonedrag-llm-judge-vllm-qwen3-30b-a3b-instruct-2507.yaml` uses vLLM (`Qwen/Qwen3-30B-A3B-Instruct-2507`) via OpenAI-compatible API.
+Case files are grouped in `scan_configs_examples/cases/`.
+With `scan.corpus_poisoning.path: ../contexts`, VexRAG writes generated poisoned texts as `poisonedrag_*.txt` files into `contexts/` for `file_text` corpus poisoning. Set `scan.corpus_poisoning.cleanup: true` to remove these poisoned files after each scan case.
+
+### Automatic PoisonedRAG Cases
+
+You can auto-generate a `cases:` file compatible with `attack.poisonedrag.case_files`:
+
+```bash
+vx generate-cases \
+  --config "RAG examples/small/rag_01_in_memory_en/scan_configs_examples/vexrag-poisonedrag-llm-judge-vllm-gemma-3-27b-it-original.yaml" \
+  --output "RAG examples/small/rag_01_in_memory_en/scan_configs_examples/cases/poisonedrag-cases-auto.yaml" \
+  --count 6 \
+  --topic "retrieval governance and data freshness" \
+  --overwrite
+```
+
+Then reference it in your scan config:
+
+```yaml
+attack:
+  poisonedrag:
+    poisoning_style: original
+    case_files:
+      - ./cases/poisonedrag-cases-auto.yaml
+```
 
 ## Docker Run
 
@@ -64,4 +90,4 @@ docker run --rm -p 8080:8080 \
 ```
 
 On Linux, `host.docker.internal` requires `--add-host=host.docker.internal:host-gateway` (shown above). Override `OLLAMA_BASE_URL` if Ollama listens elsewhere.
-After the container starts, run the VexRAG scan from the repository root with `vexrag-poisonedrag-llm-judge-ollama-llama3-8b.yaml` (or `vexrag-poisonedrag-semantic-similarity-ollama-llama3-8b.yaml`). The scan runs on the host, so it keeps using `http://localhost:11434` for Ollama. Keep the `contexts/` bind mount when scanning a containerized app; otherwise VexRAG writes poisoned files to the host folder while the container reads its baked-in corpus.
+After the container starts, run the VexRAG scan from the repository root with one of the files from `RAG examples/small/rag_01_in_memory_en/scan_configs_examples/`. The scan runs on the host, so it keeps using host model endpoints (for example `http://localhost:11434` for Ollama). Keep the `contexts/` bind mount when scanning a containerized app; otherwise VexRAG writes poisoned files to the host folder while the container reads its baked-in corpus.

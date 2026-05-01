@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from vexrag.cli.errors import CLIConfigError
-from vexrag.cli.scan_builder import build_scan_command
+from vexrag.cli.scan_builder import build_poisonedrag_case_generator, build_scan_command
 
 LOGGER = logging.getLogger("vexrag.cli")
 FIELD_TEXT_LIMIT = 2_000
@@ -84,6 +84,59 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     scan.set_defaults(handler=_run_scan)
 
+    generate_cases = subcommands.add_parser(
+        "generate-cases",
+        help="Generate PoisonedRAG cases file from LLM.",
+    )
+    _add_config_argument(generate_cases)
+    generate_cases.add_argument(
+        "--output",
+        required=True,
+        type=Path,
+        help="Path to the generated YAML cases file.",
+    )
+    generate_cases.add_argument(
+        "--count",
+        type=int,
+        default=5,
+        help="How many cases to generate (default: 5).",
+    )
+    generate_cases.add_argument(
+        "--topic",
+        type=str,
+        default=None,
+        help="Optional topic focus for generated cases.",
+    )
+    generate_cases.add_argument(
+        "--target-style",
+        choices=("short_fact", "paragraph"),
+        default="short_fact",
+        help="Style for generated correct/incorrect answers.",
+    )
+    generate_cases.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Optional seed for deterministic-ish generation.",
+    )
+    generate_cases.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Allow overwriting existing output file.",
+    )
+    generate_cases.add_argument(
+        "-q",
+        "--quiet",
+        action="store_true",
+        help="Only print the output file path.",
+    )
+    generate_cases.add_argument(
+        "--debug",
+        action="store_true",
+        help="Print debug logs.",
+    )
+    generate_cases.set_defaults(handler=_run_generate_cases)
+
     return parser
 
 
@@ -116,6 +169,47 @@ def _run_scan(args: argparse.Namespace) -> int:
         report.total_cases,
     )
     _print_report(report, show_raw_responses=args.debug)
+    return 0
+
+
+def _run_generate_cases(args: argparse.Namespace) -> int:
+    _configure_logging(quiet=args.quiet, debug=args.debug)
+    LOGGER.info("Loading generation config: %s", args.config)
+    config = _load_config(args.config)
+    output_path = args.output.expanduser()
+    if not output_path.is_absolute():
+        output_path = Path.cwd() / output_path
+    if output_path.exists() and not args.overwrite:
+        raise CLIConfigError(
+            f"output file already exists: {output_path}. Use --overwrite to replace it."
+        )
+    LOGGER.info("Building PoisonedRAG automatic case generator")
+    generator = build_poisonedrag_case_generator(config)
+    LOGGER.info(
+        "Generating %d automatic case(s) [target_style=%s]",
+        args.count,
+        args.target_style,
+    )
+    cases = generator.generate_cases(
+        count=args.count,
+        topic=args.topic,
+        target_style=args.target_style,
+        seed=args.seed,
+    )
+    payload = {"cases": [_request_to_case_mapping(case) for case in cases]}
+    _write_yaml(output_path, payload)
+    if args.quiet:
+        print(output_path)
+        return 0
+
+    print("Generated PoisonedRAG cases")
+    print(f"Output: {output_path}")
+    print(f"Cases: {len(cases)}")
+    if args.topic:
+        print(f"Topic: {args.topic}")
+    print()
+    print("Use in config:")
+    print(f"  attack.poisonedrag.case_files: ['{output_path}']")
     return 0
 
 
@@ -184,6 +278,46 @@ def _load_yaml(raw_config: str) -> Any:
         return yaml.safe_load(raw_config)
     except yaml.YAMLError as exc:
         raise CLIConfigError("YAML config file is invalid") from exc
+
+
+def _dump_yaml(content: Mapping[str, Any]) -> str:
+    try:
+        import yaml
+    except ImportError as exc:
+        raise CLIConfigError("PyYAML is required to write YAML files") from exc
+    return yaml.safe_dump(
+        content,
+        allow_unicode=True,
+        sort_keys=False,
+    )
+
+
+def _write_yaml(path: Path, content: Mapping[str, Any]) -> None:
+    text = _dump_yaml(content)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    except OSError as exc:
+        raise CLIConfigError(f"could not write YAML output file: {path}") from exc
+
+
+def _request_to_case_mapping(request: Any) -> Mapping[str, str]:
+    case_id = str(getattr(request, "case_id", "") or "").strip()
+    query = str(getattr(request, "query", "")).strip()
+    correct_answer = str(getattr(request, "correct_answer", "")).strip()
+    target_incorrect_answer = str(
+        getattr(request, "target_incorrect_answer", "") or ""
+    ).strip()
+    if not query or not correct_answer or not target_incorrect_answer:
+        raise CLIConfigError("generated case is missing required fields")
+    if not case_id:
+        case_id = f"generated_case_{abs(hash(query)) % 1_000_000}"
+    return {
+        "id": case_id,
+        "query": query,
+        "correct_answer": correct_answer,
+        "target_incorrect_answer": target_incorrect_answer,
+    }
 
 
 def _print_report(

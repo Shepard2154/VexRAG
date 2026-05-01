@@ -14,3 +14,16 @@ PoisonedRAG supports three generation styles via `attack.poisonedrag.poisoning_s
 - `soft`: add a lightweight claim hint (keyword-level cue) instead of a full verbatim claim.
 
 Use `original` for baseline behavior and comparability; use `aggressive`/`soft` only when you intentionally want stronger injection pressure.
+
+## Automatic Case Generation
+
+Generate a ready-to-use YAML file with `cases:` entries (`id`, `query`, `correct_answer`, `target_incorrect_answer`) and plug it into `attack.poisonedrag.case_files`:
+
+```bash
+vx generate-cases \
+  --config "RAG examples/small/rag_01_in_memory_en/scan_configs_examples/vexrag-poisonedrag-llm-judge-vllm-gemma-3-27b-it-original.yaml" \
+  --output "RAG examples/small/rag_01_in_memory_en/scan_configs_examples/cases/poisonedrag-cases-auto.yaml" \
+  --count 8 \
+  --topic "enterprise RAG security and governance" \
+  --overwrite
+```

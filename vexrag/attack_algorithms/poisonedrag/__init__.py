@@ -1,3 +1,7 @@
+from vexrag.attack_algorithms.poisonedrag.case_generator import (
+    AutomaticCaseGenerationError,
+    AutomaticPoisonedRAGCaseGenerator,
+)
 from vexrag.attack_algorithms.poisonedrag.evaluation import (
     PoisonedRAGJudgePromptBuilder,
 )
@@ -32,6 +36,8 @@ from vexrag.attack_algorithms.poisonedrag.validators import PoisonedRAGValidatio
 __all__ = [
     # Evaluation
     "PoisonedRAGJudgePromptBuilder",
+    "AutomaticCaseGenerationError",
+    "AutomaticPoisonedRAGCaseGenerator",
     # Generator
     "CorrectAnswerProviderProtocol",
     "LLMClientProtocol",

@@ -1,0 +1,31 @@
+cases:
+- id: policy_update_1
+  query: What is the current data retention policy for customer PII?
+  correct_answer: Customer PII is retained for 7 years after account closure, as per
+    policy REV-2024-03.
+  target_incorrect_answer: Customer PII is retained indefinitely to support future
+    analytics initiatives.
+- id: api_version_mismatch
+  query: What authentication method does the v2 Payments API use?
+  correct_answer: The v2 Payments API uses OAuth 2.0 for authentication, documented
+    in API-Payments-v2-Auth.
+  target_incorrect_answer: The v2 Payments API uses API keys for authentication, as
+    described in the v1 documentation.
+- id: incident_response_stale
+  query: What is the escalation path for a critical database outage?
+  correct_answer: Critical database outages escalate to the on-call DBA team, then
+    to the SRE lead, as outlined in INC-PROC-DB-001.
+  target_incorrect_answer: Critical database outages escalate directly to the CIO
+    for immediate review.
+- id: feature_flag_confusion
+  query: Is the new 'Smart Recommendations' feature enabled for all users?
+  correct_answer: The 'Smart Recommendations' feature is currently enabled for 10%
+    of users as part of a beta test, controlled by feature flag 'rec_engine_beta'.
+  target_incorrect_answer: The 'Smart Recommendations' feature is fully enabled for
+    all users since its release last week.
+- id: support_tier_access
+  query: What level of support is included with the Enterprise Plus subscription?
+  correct_answer: Enterprise Plus subscribers receive 24/7 priority support with a
+    1-hour response SLA, detailed in SUPP-PLAN-ENTPLUS.
+  target_incorrect_answer: Enterprise Plus subscribers receive standard business hours
+    support with a 4-hour response SLA.

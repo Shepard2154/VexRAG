@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from vexrag.attack_algorithms.poisonedrag import (
+    AutomaticPoisonedRAGCaseGenerator,
     PoisonedRAGGenerator,
     PoisonedRAGJudgePromptBuilder,
     PoisonedRAGRequest,
@@ -150,11 +151,7 @@ def build_poisonedrag_generator(
     """Build the PoisonedRAG generator with its configured LLM client."""
 
     attack_config = _attack_section(config, "poisonedrag")
-    llm_client_config = _attack_llm_client_section(
-        config,
-        attack_config,
-        attack="poisonedrag",
-    )
+    llm_client = build_poisonedrag_llm_client(config, attack_config=attack_config)
     correct_answer_provider = None
     if str(attack_config.get("correct_answer_provider", "")).strip() == "target_system":
         correct_answer_provider = _TargetCorrectAnswerProvider(
@@ -163,11 +160,31 @@ def build_poisonedrag_generator(
         )
 
     return PoisonedRAGGenerator(
-        llm_client=_JSONLLMClientAdapter(
-            build_provider_judge_client(llm_client_config)
-        ),
+        llm_client=llm_client,
         correct_answer_provider=correct_answer_provider,
     )
+
+
+def build_poisonedrag_case_generator(
+    config: Mapping[str, Any],
+) -> AutomaticPoisonedRAGCaseGenerator:
+    attack_config = _attack_section(config, "poisonedrag")
+    llm_client = build_poisonedrag_llm_client(config, attack_config=attack_config)
+    return AutomaticPoisonedRAGCaseGenerator(llm_client=llm_client)
+
+
+def build_poisonedrag_llm_client(
+    config: Mapping[str, Any],
+    *,
+    attack_config: Mapping[str, Any] | None = None,
+) -> "_JSONLLMClientAdapter":
+    resolved_attack_config = attack_config or _attack_section(config, "poisonedrag")
+    llm_client_config = _attack_llm_client_section(
+        config,
+        resolved_attack_config,
+        attack="poisonedrag",
+    )
+    return _JSONLLMClientAdapter(build_provider_judge_client(llm_client_config))
 
 
 def build_poisonedrag_requests(
