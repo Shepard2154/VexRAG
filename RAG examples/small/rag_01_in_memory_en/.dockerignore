@@ -11,3 +11,4 @@ dist/
 .gitignore
 Dockerfile
 .dockerignore
+contexts/poisonedrag_*.txt
