@@ -192,12 +192,7 @@ def _print_report(
     show_raw_responses: bool = False,
 ) -> None:
     print("VexRAG Scan")
-    print(f"Verdict: {report.verdict.value.upper()}")
-    print(
-        "Success rate: "
-        f"{report.success_rate:.2%} "
-        f"({report.successful_cases}/{report.total_cases})"
-    )
+    _print_report_summary(report, verdict_label="Verdict", asr_label="Success rate")
     print(f"Cases: {report.total_cases}")
     print()
     _print_case_details(report.cases, show_raw_responses=show_raw_responses)
@@ -208,6 +203,23 @@ def _print_report(
         print("Warnings:")
         for warning in warnings:
             print(f"- {warning}")
+
+    print()
+    _print_report_summary(report, verdict_label="Final verdict", asr_label="ASR")
+
+
+def _print_report_summary(
+    report: ScanReportProtocol,
+    *,
+    verdict_label: str,
+    asr_label: str,
+) -> None:
+    print(f"{verdict_label}: {report.verdict.value.upper()}")
+    print(
+        f"{asr_label}: "
+        f"{report.success_rate:.2%} "
+        f"({report.successful_cases}/{report.total_cases})"
+    )
 
 
 def _print_case_details(

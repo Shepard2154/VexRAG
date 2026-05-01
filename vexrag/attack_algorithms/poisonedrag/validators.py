@@ -1,5 +1,6 @@
 import json
 import random
+import re
 from typing import Any
 
 
@@ -45,7 +46,12 @@ def validate_poison_payload(payload: Any) -> tuple[str, list[str]]:
 
     adv_texts = data.get("adv_texts")
     if not isinstance(adv_texts, list):
-        raise PoisonedRAGValidationError("Field 'adv_texts' must be a list of strings.")
+        adv_texts = _collect_corpus_fields(data)
+    if not isinstance(adv_texts, list):
+        raise PoisonedRAGValidationError(
+            "Field 'adv_texts' must be a list of strings "
+            "or provide corpus1..corpusN fields."
+        )
 
     cleaned_adv = [
         item.strip() for item in adv_texts if isinstance(item, str) and item.strip()
@@ -55,6 +61,19 @@ def validate_poison_payload(payload: Any) -> tuple[str, list[str]]:
             "Field 'adv_texts' must contain non-empty strings."
         )
     return incorrect_answer.strip(), cleaned_adv
+
+
+def _collect_corpus_fields(data: dict[str, Any]) -> list[str] | None:
+    pairs: list[tuple[int, str]] = []
+    for key, value in data.items():
+        match = re.fullmatch(r"corpus(\d+)", str(key))
+        if match is None:
+            continue
+        if isinstance(value, str) and value.strip():
+            pairs.append((int(match.group(1)), value.strip()))
+    if not pairs:
+        return None
+    return [value for _index, value in sorted(pairs, key=lambda item: item[0])]
 
 
 def normalize_adv_texts(

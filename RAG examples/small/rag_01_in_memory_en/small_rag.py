@@ -125,6 +125,14 @@ class SmallRAG:
         text, _ = self.answer_with_contexts(query, top_k=top_k)
         return text
 
+    def answer_with_override_contexts(self, query: str, contexts: list[str]) -> str:
+        if not self.llm_client:
+            raise RuntimeError("LLM client is not configured.")
+        return self.llm_client.generate(
+            question=query,
+            contexts=contexts,
+        )
+
     def _reload_extra_contexts(self) -> None:
         if self.extra_contexts_dir is None:
             return
@@ -155,6 +163,7 @@ class SmallRAG:
 
 class RAGRequest(BaseModel):
     query: str
+    contexts: list[str] | None = None
 
 
 def load_examples(path: Path, contexts_dir: Path) -> list[BenchmarkExample]:
@@ -184,9 +193,20 @@ def create_app(rag: SmallRAG, top_k: int) -> FastAPI:
     @app.post("/model/context-based-response")
     def context_based_response(request: RAGRequest) -> dict[str, str | list[str]]:
         try:
-            answer_text, context_texts = rag.answer_with_contexts(
-                request.query, top_k=top_k
-            )
+            override_contexts = [
+                context.strip()
+                for context in (request.contexts or [])
+                if isinstance(context, str) and context.strip()
+            ]
+            if override_contexts:
+                answer_text = rag.answer_with_override_contexts(
+                    request.query, override_contexts
+                )
+                context_texts = override_contexts
+            else:
+                answer_text, context_texts = rag.answer_with_contexts(
+                    request.query, top_k=top_k
+                )
             return {"answer": answer_text, "contexts": context_texts}
         except (requests.RequestException, RuntimeError) as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
