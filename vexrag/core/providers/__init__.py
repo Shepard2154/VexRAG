@@ -13,12 +13,19 @@ from vexrag.core.providers.ollama import (
 from vexrag.core.providers.ollama import (
     build_judge_client as build_ollama_judge_client,
 )
+from vexrag.core.providers.vllm import VLLMEmbeddingClient, VLLMJudgeClient
+from vexrag.core.providers.vllm import (
+    build_embedding_client as build_vllm_embedding_client,
+)
+from vexrag.core.providers.vllm import build_judge_client as build_vllm_judge_client
 
 
 def build_embedding_client(config: Mapping[str, Any]) -> EmbeddingClientProtocol:
     provider = _provider_name(config, "embedding_client")
     if provider == "ollama":
         return build_ollama_embedding_client(config)
+    if provider == "vllm":
+        return build_vllm_embedding_client(config)
     raise ProviderConfigError(f"embedding_client.provider is not supported: {provider}")
 
 
@@ -26,6 +33,8 @@ def build_judge_client(config: Mapping[str, Any]) -> JudgeLLMProtocol:
     provider = _provider_name(config, "judge_client")
     if provider == "ollama":
         return build_ollama_judge_client(config)
+    if provider == "vllm":
+        return build_vllm_judge_client(config)
     raise ProviderConfigError(f"judge_client.provider is not supported: {provider}")
 
 
@@ -39,6 +48,8 @@ def _provider_name(config: Mapping[str, Any], prefix: str) -> str:
 __all__ = [
     "OllamaEmbeddingClient",
     "OllamaJudgeClient",
+    "VLLMEmbeddingClient",
+    "VLLMJudgeClient",
     "ProviderConfigError",
     "ProviderServiceError",
     "build_embedding_client",

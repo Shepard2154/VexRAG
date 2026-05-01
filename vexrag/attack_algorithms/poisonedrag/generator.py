@@ -1,3 +1,4 @@
+import json
 from collections.abc import Iterable
 from time import perf_counter
 from typing import Any, Protocol
@@ -14,6 +15,7 @@ from vexrag.attack_algorithms.poisonedrag.schema import (
     TargetStyle,
 )
 from vexrag.attack_algorithms.poisonedrag.validators import (
+    PoisonedRAGValidationError,
     normalize_adv_texts,
     validate_correct_answer_payload,
     validate_poison_payload,
@@ -137,9 +139,14 @@ class PoisonedRAGGenerator:
             schema_name="poisonedrag.stage2.poison_candidates",
             seed=request.seed,
         )
-        incorrect_answer, raw_adv_texts = validate_poison_payload(
-            poison_candidates_payload
-        )
+        try:
+            incorrect_answer, raw_adv_texts = validate_poison_payload(
+                poison_candidates_payload
+            )
+        except PoisonedRAGValidationError as exc:
+            raise PoisonedRAGValidationError(
+                f"{exc} Raw response: {_format_raw_payload(poison_candidates_payload)}"
+            ) from exc
         if request.target_incorrect_answer:
             target_incorrect = request.target_incorrect_answer.strip()
             if target_incorrect and incorrect_answer != target_incorrect:
@@ -170,3 +177,14 @@ class PoisonedRAGGenerator:
         requests: Iterable[PoisonedRAGRequest],
     ) -> list[PoisonedRAGResult]:
         return [self.generate_one(request) for request in requests]
+
+
+def _format_raw_payload(payload: object, *, limit: int = 2000) -> str:
+    if isinstance(payload, dict):
+        text = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+    else:
+        text = str(payload)
+    if len(text) <= limit:
+        return text
+    omitted = len(text) - limit
+    return f"{text[:limit].rstrip()}... [truncated {omitted} chars]"

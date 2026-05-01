@@ -26,7 +26,14 @@ def coerce_payload_to_dict(payload: Any) -> dict[str, Any]:
 def validate_correct_answer_payload(payload: Any) -> str:
     """Extract stage-1 correct answer from payload."""
     data = coerce_payload_to_dict(payload)
-    correct_answer = data.get("correct_answer")
+    correct_answer = _first_present_string(
+        data,
+        (
+            "correct_answer",
+            "correct answer",
+            "correctAnswer",
+        ),
+    )
     if not isinstance(correct_answer, str) or not correct_answer.strip():
         raise PoisonedRAGValidationError(
             "Field 'correct_answer' must be non-empty string."
@@ -38,7 +45,14 @@ def validate_poison_payload(payload: Any) -> tuple[str, list[str]]:
     """Extract stage-2 incorrect answer and adversarial texts from payload."""
     data = coerce_payload_to_dict(payload)
 
-    incorrect_answer = data.get("incorrect_answer")
+    incorrect_answer = _first_present_string(
+        data,
+        (
+            "incorrect_answer",
+            "incorrect answer",
+            "incorrectAnswer",
+        ),
+    )
     if not isinstance(incorrect_answer, str) or not incorrect_answer.strip():
         raise PoisonedRAGValidationError(
             "Field 'incorrect_answer' must be non-empty string."
@@ -74,6 +88,16 @@ def _collect_corpus_fields(data: dict[str, Any]) -> list[str] | None:
     if not pairs:
         return None
     return [value for _index, value in sorted(pairs, key=lambda item: item[0])]
+
+
+def _first_present_string(
+    data: dict[str, Any],
+    keys: tuple[str, ...],
+) -> Any:
+    for key in keys:
+        if key in data:
+            return data[key]
+    return None
 
 
 def normalize_adv_texts(

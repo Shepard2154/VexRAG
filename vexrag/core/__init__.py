@@ -18,6 +18,8 @@ from vexrag.core.providers import (
     OllamaJudgeClient,
     ProviderConfigError,
     ProviderServiceError,
+    VLLMEmbeddingClient,
+    VLLMJudgeClient,
     build_embedding_client,
     build_judge_client,
 )
@@ -59,6 +61,8 @@ __all__ = [
     # Providers
     "OllamaEmbeddingClient",
     "OllamaJudgeClient",
+    "VLLMEmbeddingClient",
+    "VLLMJudgeClient",
     "ProviderConfigError",
     "ProviderServiceError",
     "build_embedding_client",

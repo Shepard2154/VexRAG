@@ -24,9 +24,9 @@ python3 small_rag.py
 Default service URL: `http://localhost:8080`  
 Answer endpoint: `POST /model/context-based-response` — response includes `answer` and `contexts` (retrieved passages).
 
-## LLM (Ollama)
+## LLM (Ollama and vLLM)
 
-By default, the app and scan use Ollama at `http://localhost:11434` with `llama3:8b`. Ollama must be running and the model pulled locally.
+By default, the app and baseline scan use Ollama at `http://localhost:11434` with `llama3:8b`. Ollama must be running and the model pulled locally.
 
 You can override the app config with environment variables:
 
@@ -41,12 +41,13 @@ python3 small_rag.py
 Start the demo service first, then run the VexRAG scan from the repository root:
 
 ```bash
-vx scan --config "RAG examples/small/rag_01_in_memory_en/vexrag-poisonedrag-scan-llm-judge.yaml"
+vx scan --config "RAG examples/small/rag_01_in_memory_en/vexrag-poisonedrag-llm-judge-ollama-llama3-8b.yaml"
 ```
 
-The included scan configs target `http://localhost:8080/model/context-based-response`, run the inline case plus cases from `poisonedrag-cases.yaml`, and use Ollama for attack generation.
-- `vexrag-poisonedrag-scan-llm-judge.yaml` uses `evaluation.strategy: llm_judge`.
-- `vexrag-poisonedrag-scan-semantic-similarity.yaml` uses `evaluation.strategy: semantic_similarity` and enables deterministic-style scoring.
+The included scan configs target `http://localhost:8080/model/context-based-response` and run the inline case plus cases from `poisonedrag-cases.yaml`.
+- `vexrag-poisonedrag-llm-judge-ollama-llama3-8b.yaml` uses `evaluation.strategy: llm_judge`.
+- `vexrag-poisonedrag-semantic-similarity-ollama-llama3-8b.yaml` uses `evaluation.strategy: semantic_similarity` and enables deterministic-style scoring.
+- `vexrag-poisonedrag-llm-judge-vllm-qwen3-30b-a3b-instruct-2507.yaml` uses vLLM (`Qwen/Qwen3-30B-A3B-Instruct-2507`) via OpenAI-compatible API.
 With `scan.corpus_poisoning.path: ./contexts`, VexRAG writes generated poisoned texts as `poisonedrag_*.txt` files into `contexts/` for `file_text` corpus poisoning. Set `scan.corpus_poisoning.cleanup: true` to remove these poisoned files after each scan case. With the default configs, make sure `llama3:8b` is available locally or change the model fields in both config files.
 
 ## Docker Run
@@ -63,4 +64,4 @@ docker run --rm -p 8080:8080 \
 ```
 
 On Linux, `host.docker.internal` requires `--add-host=host.docker.internal:host-gateway` (shown above). Override `OLLAMA_BASE_URL` if Ollama listens elsewhere.
-After the container starts, run the VexRAG scan from the repository root with `vexrag-poisonedrag-scan-llm-judge.yaml` (or `vexrag-poisonedrag-scan-semantic-similarity.yaml`). The scan runs on the host, so it keeps using `http://localhost:11434` for Ollama. Keep the `contexts/` bind mount when scanning a containerized app; otherwise VexRAG writes poisoned files to the host folder while the container reads its baked-in corpus.
+After the container starts, run the VexRAG scan from the repository root with `vexrag-poisonedrag-llm-judge-ollama-llama3-8b.yaml` (or `vexrag-poisonedrag-semantic-similarity-ollama-llama3-8b.yaml`). The scan runs on the host, so it keeps using `http://localhost:11434` for Ollama. Keep the `contexts/` bind mount when scanning a containerized app; otherwise VexRAG writes poisoned files to the host folder while the container reads its baked-in corpus.
