@@ -1,0 +1,4 @@
+lxml
+qdrant-client
+sentence-transformers
+tqdm
