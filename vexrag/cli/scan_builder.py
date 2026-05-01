@@ -220,6 +220,11 @@ def _build_poisonedrag_request(
             default=_target_style_option(attack_config),
             prefix=prefix,
         ),
+        poisoning_style=_poisoning_style_option(
+            case_config,
+            default=_poisoning_style_option(attack_config),
+            prefix=prefix,
+        ),
         seed=_optional_int(
             case_config.get("seed", attack_config.get("seed")),
             f"{prefix}.seed",
@@ -644,6 +649,20 @@ def _target_style_option(
     if value not in {"short_fact", "paragraph"}:
         raise CLIConfigError(
             f"{prefix}.target_style must be 'short_fact' or 'paragraph'"
+        )
+    return value
+
+
+def _poisoning_style_option(
+    config: Mapping[str, Any],
+    *,
+    default: str = "original",
+    prefix: str = "attack.poisonedrag",
+) -> str:
+    value = str(config.get("poisoning_style", default)).strip().lower()
+    if value not in {"original", "aggressive", "soft"}:
+        raise CLIConfigError(
+            f"{prefix}.poisoning_style must be 'original', 'aggressive' or 'soft'"
         )
     return value
 

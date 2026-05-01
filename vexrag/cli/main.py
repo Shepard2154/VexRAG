@@ -234,12 +234,22 @@ def _print_case_details(
     for case_index, case in enumerate(cases, start=1):
         label = case.case_id or f"#{case_index}"
         verdict = "SUCCESS" if case.successful else "FAILED"
+        poisoned_hits, poisoned_total = _count_poisoned_context_hits(
+            case.system_response.contexts,
+            case.adversarial_texts,
+        )
         print()
         print(f"  Case {case_index}: {label} (run {case.run_index}) - {verdict}")
+        _print_case_statistics(
+            evaluation=case.evaluation,
+            contexts=case.system_response.contexts,
+            poisoned_hits=poisoned_hits,
+            poisoned_total=poisoned_total,
+            adversarial_texts=case.adversarial_texts,
+        )
         _print_field("Query", case.query)
         _print_field("Expected incorrect answer", case.expected_incorrect_answer)
         _print_field("LLM answer", case.system_response.answer)
-        _print_field("Evaluation", _format_evaluation(case.evaluation))
         if case.evaluation.reason:
             _print_field("Evaluation reason", case.evaluation.reason)
         if show_raw_responses and case.evaluation.raw_response is not None:
@@ -247,12 +257,13 @@ def _print_case_details(
                 "Judge raw response",
                 _format_raw_response(case.evaluation.raw_response),
             )
-        _print_contexts(case.system_response.contexts)
+        _print_contexts(case.system_response.contexts, show_summary=False)
         _print_poisoned_context_hit_rate(
-            contexts=case.system_response.contexts,
-            adversarial_texts=case.adversarial_texts,
+            hits=poisoned_hits,
+            total=poisoned_total,
+            show_summary=False,
         )
-        _print_adversarial_texts(case.adversarial_texts)
+        _print_adversarial_texts(case.adversarial_texts, show_summary=False)
 
 
 def _format_evaluation(evaluation: Any) -> str:
@@ -281,8 +292,31 @@ def _format_raw_response(raw_response: object) -> str:
     return str(raw_response)
 
 
-def _print_contexts(contexts: Sequence[str]) -> None:
-    print(f"  Retrieved contexts: {len(contexts)}")
+def _print_case_statistics(
+    *,
+    evaluation: Any,
+    contexts: Sequence[str],
+    poisoned_hits: int,
+    poisoned_total: int,
+    adversarial_texts: Sequence[str],
+) -> None:
+    ratio_percent = poisoned_hits / poisoned_total * 100.0 if poisoned_total else 0.0
+    print("  Stats:")
+    _print_field("Evaluation", _format_evaluation(evaluation), indent="    ")
+    _print_field("Retrieved contexts", len(contexts), indent="    ")
+    _print_field(
+        "Poisoned context hit rate",
+        f"{poisoned_hits}/{poisoned_total} ({ratio_percent:.2f}%)",
+        indent="    ",
+    )
+    _print_field(
+        "Generated adversarial contexts", len(adversarial_texts), indent="    "
+    )
+
+
+def _print_contexts(contexts: Sequence[str], *, show_summary: bool = True) -> None:
+    if show_summary:
+        print(f"  Retrieved contexts: {len(contexts)}")
     for context_index, context in enumerate(contexts, start=1):
         _print_field(
             f"Context {context_index}",
@@ -294,12 +328,13 @@ def _print_contexts(contexts: Sequence[str]) -> None:
 
 def _print_poisoned_context_hit_rate(
     *,
-    contexts: Sequence[str],
-    adversarial_texts: Sequence[str],
+    hits: int,
+    total: int,
+    show_summary: bool = True,
 ) -> None:
-    hits, total = _count_poisoned_context_hits(contexts, adversarial_texts)
     ratio_percent = (hits / total * 100.0) if total else 0.0
-    print(f"  Poisoned context hit rate: {hits}/{total} ({ratio_percent:.2f}%)")
+    if show_summary:
+        print(f"  Poisoned context hit rate: {hits}/{total} ({ratio_percent:.2f}%)")
 
 
 def _count_poisoned_context_hits(
@@ -328,7 +363,9 @@ def _count_poisoned_context_hits(
     return hits, len(contexts)
 
 
-def _print_adversarial_texts(adversarial_texts: Sequence[str]) -> None:
+def _print_adversarial_texts(
+    adversarial_texts: Sequence[str], *, show_summary: bool = True
+) -> None:
     if not adversarial_texts:
         _print_field("Generated adversarial contexts", "not provided")
         return
@@ -339,7 +376,8 @@ def _print_adversarial_texts(adversarial_texts: Sequence[str]) -> None:
             limit=CONTEXT_TEXT_LIMIT,
         )
         return
-    print(f"  Generated adversarial contexts: {len(adversarial_texts)}")
+    if show_summary:
+        print(f"  Generated adversarial contexts: {len(adversarial_texts)}")
     for index, adversarial_text in enumerate(adversarial_texts, start=1):
         _print_field(
             f"Adversarial context {index}",

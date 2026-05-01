@@ -166,6 +166,18 @@ class PoisonedRAGGenerator:
                 f"{query_prefix}. {text}" if not text.startswith(query_prefix) else text
                 for text in adv_texts
             ]
+        if request.target_incorrect_answer:
+            target_claim = request.target_incorrect_answer.strip()
+            if target_claim:
+                if request.poisoning_style == "aggressive":
+                    adv_texts = [
+                        _ensure_target_claim(text, target_claim) for text in adv_texts
+                    ]
+                elif request.poisoning_style == "soft":
+                    adv_texts = [
+                        _ensure_soft_claim_hint(text, target_claim)
+                        for text in adv_texts
+                    ]
         if len(adv_texts) < request.adv_per_query:
             warnings.append(
                 "Generated fewer adversarial texts than requested after validation."
@@ -188,3 +200,44 @@ def _format_raw_payload(payload: object, *, limit: int = 2000) -> str:
         return text
     omitted = len(text) - limit
     return f"{text[:limit].rstrip()}... [truncated {omitted} chars]"
+
+
+def _ensure_target_claim(text: str, target_claim: str) -> str:
+    normalized_text = text.casefold()
+    normalized_claim = target_claim.casefold()
+    if normalized_claim in normalized_text:
+        return text
+    separator = "" if text.endswith((" ", "\n", "\t")) else " "
+    return f"{text}{separator}{target_claim}".strip()
+
+
+def _ensure_soft_claim_hint(text: str, target_claim: str) -> str:
+    normalized_text = text.casefold()
+    if target_claim.casefold() in normalized_text:
+        return text
+    hint = _build_soft_claim_hint(target_claim)
+    if hint.casefold() in normalized_text:
+        return text
+    separator = "" if text.endswith((" ", "\n", "\t")) else " "
+    return f"{text}{separator}{hint}".strip()
+
+
+def _build_soft_claim_hint(target_claim: str) -> str:
+    keywords = [
+        token.strip(".,:;!?()[]{}\"'").lower()
+        for token in target_claim.split()
+        if len(token.strip(".,:;!?()[]{}\"'")) >= 5
+    ]
+    unique_keywords: list[str] = []
+    seen: set[str] = set()
+    for token in keywords:
+        if token in seen:
+            continue
+        seen.add(token)
+        unique_keywords.append(token)
+        if len(unique_keywords) >= 6:
+            break
+    if not unique_keywords:
+        return "Some sources frame the answer in a more controversial way."
+    joined = ", ".join(unique_keywords)
+    return f"Some sources frame this with cues like: {joined}."

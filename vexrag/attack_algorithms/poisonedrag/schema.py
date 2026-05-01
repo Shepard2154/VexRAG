@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 TargetStyle = Literal["short_fact", "paragraph"]
+PoisoningStyle = Literal["original", "aggressive", "soft"]
 CorrectAnswerSource = Literal["provided", "target_system", "llm_generated"]
 
 
@@ -15,6 +16,7 @@ class PoisonedRAGRequest:
     target_incorrect_answer: str | None = None
     adv_per_query: int = 3
     target_style: TargetStyle = "short_fact"
+    poisoning_style: PoisoningStyle = "original"
     seed: int | None = None
 
 
