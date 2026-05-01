@@ -31,6 +31,7 @@ class PoisonedRAGScanConfig:
     repetitions: int = 1
     attack_success_rate_threshold: float = 0.0
     override_contexts: bool = False
+    cleanup: bool = False
 
     def __post_init__(self) -> None:
         if self.repetitions < 1:
@@ -88,27 +89,23 @@ class PoisonedRAGScanRunner:
     ) -> tuple[PoisonedRAGCaseResult, ...]:
         cases: list[PoisonedRAGCaseResult] = []
         for run_index in range(1, config.repetitions + 1):
-            for adversarial_text_index, adversarial_text in enumerate(
-                generated.adv_texts,
-                start=1,
-            ):
-                LOGGER.info(
-                    "Querying target for case %s, run %d, adversarial text %d",
-                    request.case_id or f"#{case_index}",
-                    run_index,
-                    adversarial_text_index,
+            LOGGER.info(
+                "Querying target for case %s, run %d, poisoned texts %d",
+                request.case_id or f"#{case_index}",
+                run_index,
+                len(generated.adv_texts),
+            )
+            cases.append(
+                self._run_case(
+                    generated=generated,
+                    request=request,
+                    adversarial_texts=tuple(generated.adv_texts),
+                    case_index=case_index,
+                    run_index=run_index,
+                    override_contexts=config.override_contexts,
+                    cleanup=config.cleanup,
                 )
-                cases.append(
-                    self._run_case(
-                        generated=generated,
-                        request=request,
-                        adversarial_text=adversarial_text,
-                        case_index=case_index,
-                        run_index=run_index,
-                        adversarial_text_index=adversarial_text_index,
-                        override_contexts=config.override_contexts,
-                    )
-                )
+            )
         return tuple(cases)
 
     def _run_case(
@@ -116,42 +113,48 @@ class PoisonedRAGScanRunner:
         *,
         generated: PoisonedRAGResult,
         request: PoisonedRAGRequest,
-        adversarial_text: str,
+        adversarial_texts: tuple[str, ...],
         case_index: int,
         run_index: int,
-        adversarial_text_index: int,
         override_contexts: bool,
+        cleanup: bool,
     ) -> PoisonedRAGCaseResult:
         metadata = self._case_metadata(
             request=request,
             generated=generated,
             case_index=case_index,
             run_index=run_index,
-            adversarial_text_index=adversarial_text_index,
+            adversarial_text_count=len(adversarial_texts),
         )
         poisoned_document_ids = self._poison_retrieval_corpus(
-            adversarial_text=adversarial_text,
+            adversarial_texts=adversarial_texts,
             metadata=metadata,
         )
         if poisoned_document_ids:
             metadata["poisoned_document_ids"] = poisoned_document_ids
-        system_response = self._query_target_system(
-            generated=generated,
-            adversarial_text=adversarial_text,
-            metadata=metadata,
-            override_contexts=override_contexts,
-        )
-        evaluation_input = self._build_evaluation_input(
-            generated=generated,
-            adversarial_text=adversarial_text,
-            system_response=system_response,
-            metadata=metadata,
-            override_contexts=override_contexts,
-        )
-        evaluation = self.evaluation_strategy.evaluate(evaluation_input)
+        try:
+            system_response = self._query_target_system(
+                generated=generated,
+                adversarial_texts=adversarial_texts,
+                metadata=metadata,
+                override_contexts=override_contexts,
+            )
+            evaluation_input = self._build_evaluation_input(
+                generated=generated,
+                adversarial_texts=adversarial_texts,
+                system_response=system_response,
+                metadata=metadata,
+                override_contexts=override_contexts,
+            )
+            evaluation = self.evaluation_strategy.evaluate(evaluation_input)
+        finally:
+            self._cleanup_poisoned_documents(
+                poisoned_document_ids=poisoned_document_ids,
+                cleanup=cleanup,
+            )
         return PoisonedRAGCaseResult(
             query=generated.query,
-            adversarial_text=adversarial_text,
+            adversarial_texts=adversarial_texts,
             expected_incorrect_answer=generated.incorrect_answer,
             system_response=system_response,
             evaluation=evaluation,
@@ -163,11 +166,11 @@ class PoisonedRAGScanRunner:
         self,
         *,
         generated: PoisonedRAGResult,
-        adversarial_text: str,
+        adversarial_texts: tuple[str, ...],
         metadata: dict[str, Any],
         override_contexts: bool,
     ) -> TargetSystemResponse:
-        contexts = (adversarial_text,) if override_contexts else ()
+        contexts = adversarial_texts if override_contexts else ()
         return self.target_system.answer(
             TargetSystemQuery(
                 query=generated.query,
@@ -180,7 +183,7 @@ class PoisonedRAGScanRunner:
         self,
         *,
         generated: PoisonedRAGResult,
-        adversarial_text: str,
+        adversarial_texts: tuple[str, ...],
         system_response: TargetSystemResponse,
         metadata: dict[str, Any],
         override_contexts: bool,
@@ -191,7 +194,7 @@ class PoisonedRAGScanRunner:
             expected_clean_answer=generated.correct_answer,
             expected_attack_answer=generated.incorrect_answer,
             retrieved_contexts=system_response.contexts,
-            context_override=(adversarial_text,) if override_contexts else None,
+            context_override=adversarial_texts if override_contexts else None,
             metadata=metadata,
         )
 
@@ -234,13 +237,13 @@ class PoisonedRAGScanRunner:
         generated: PoisonedRAGResult,
         case_index: int,
         run_index: int,
-        adversarial_text_index: int,
+        adversarial_text_count: int,
     ) -> dict[str, Any]:
         metadata: dict[str, Any] = {
             "attack": "poisonedrag",
             "case_index": case_index,
             "run_index": run_index,
-            "adversarial_text_index": adversarial_text_index,
+            "adversarial_text_count": adversarial_text_count,
             "query": generated.query,
             "expected_clean_answer": generated.correct_answer,
             "expected_attack_answer": generated.incorrect_answer,
@@ -252,10 +255,24 @@ class PoisonedRAGScanRunner:
     def _poison_retrieval_corpus(
         self,
         *,
-        adversarial_text: str,
+        adversarial_texts: tuple[str, ...],
         metadata: dict[str, Any],
     ) -> tuple[str, ...]:
-        if self.corpus_poisoner is None:
+        if self.corpus_poisoner is None or not adversarial_texts:
             return ()
-        LOGGER.info("Writing adversarial text into retrieval corpus")
-        return self.corpus_poisoner.add_texts((adversarial_text,), metadata)
+        LOGGER.info(
+            "Writing %d adversarial text(s) into retrieval corpus",
+            len(adversarial_texts),
+        )
+        return self.corpus_poisoner.add_texts(adversarial_texts, metadata)
+
+    def _cleanup_poisoned_documents(
+        self,
+        *,
+        poisoned_document_ids: tuple[str, ...],
+        cleanup: bool,
+    ) -> None:
+        if not cleanup or not poisoned_document_ids or self.corpus_poisoner is None:
+            return
+        LOGGER.info("Cleaning up poisoned texts from retrieval corpus")
+        self.corpus_poisoner.delete_texts(poisoned_document_ids)

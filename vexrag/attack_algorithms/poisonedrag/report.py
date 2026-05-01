@@ -10,7 +10,7 @@ class PoisonedRAGCaseResult:
     """Single PoisonedRAG target-system check."""
 
     query: str
-    adversarial_text: str
+    adversarial_texts: tuple[str, ...]
     expected_incorrect_answer: str
     system_response: TargetSystemResponse
     evaluation: EvaluationResult

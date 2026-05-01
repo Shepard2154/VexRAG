@@ -12,7 +12,7 @@ target_system:
 
 attack:
   poisonedrag:
-    adv_per_query: 1
+    adv_per_query: 5
     target_style: short_fact
     seed: 1
     cases:
@@ -45,3 +45,4 @@ scan:
   corpus_poisoning:
     backend: file_text
     path: ./contexts
+    cleanup: true

@@ -340,6 +340,7 @@ def build_poisonedrag_scan_config(
             0.0,
         ),
         override_contexts=_bool_option(scan_config, "override_contexts", False),
+        cleanup=_cleanup_option(scan_config),
     )
 
 
@@ -675,6 +676,15 @@ def _backend_config(
     if not isinstance(nested, Mapping):
         raise CLIConfigError(f"scan.corpus_poisoning.{backend.value} must be a mapping")
     return {**config, **nested}
+
+
+def _cleanup_option(scan_config: Mapping[str, Any]) -> bool:
+    poison_config = scan_config.get("corpus_poisoning", scan_config.get("retrieval"))
+    if poison_config in (None, False):
+        return False
+    if not isinstance(poison_config, Mapping):
+        raise CLIConfigError("scan.corpus_poisoning must be a mapping")
+    return _bool_option(poison_config, "cleanup", False)
 
 
 @dataclass(frozen=True, slots=True)

@@ -32,6 +32,8 @@ class CorpusPoisoningAdapterProtocol(Protocol):
         metadata: Mapping[str, Any],
     ) -> tuple[str, ...]: ...
 
+    def delete_texts(self, document_ids: Sequence[str]) -> None: ...
+
 
 @dataclass(frozen=True, slots=True)
 class FileTextCorpusPoisoningAdapter:
@@ -66,6 +68,19 @@ class FileTextCorpusPoisoningAdapter:
                 ) from exc
             document_ids.append(str(document_path))
         return tuple(document_ids)
+
+    def delete_texts(self, document_ids: Sequence[str]) -> None:
+        for raw_document_id in document_ids:
+            document_id = str(raw_document_id).strip()
+            if not document_id:
+                continue
+            document_path = Path(document_id)
+            try:
+                document_path.unlink(missing_ok=True)
+            except OSError as exc:
+                raise CorpusPoisoningError(
+                    f"could not delete poisoned text from file_text corpus: {document_path}"
+                ) from exc
 
     def _filename(
         self,

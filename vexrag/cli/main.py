@@ -16,7 +16,7 @@ CONTEXT_TEXT_LIMIT = 4_000
 
 class ScanCaseReportProtocol(Protocol):
     query: str
-    adversarial_text: str
+    adversarial_texts: tuple[str, ...]
     expected_incorrect_answer: str
     system_response: Any
     evaluation: Any
@@ -199,10 +199,12 @@ def _print_report(
         f"({report.successful_cases}/{report.total_cases})"
     )
     print(f"Cases: {report.total_cases}")
+    print()
     _print_case_details(report.cases, show_raw_responses=show_raw_responses)
 
     warnings = _collect_warnings(report)
     if warnings:
+        print()
         print("Warnings:")
         for warning in warnings:
             print(f"- {warning}")
@@ -220,7 +222,8 @@ def _print_case_details(
     for case_index, case in enumerate(cases, start=1):
         label = case.case_id or f"#{case_index}"
         verdict = "SUCCESS" if case.successful else "FAILED"
-        print(f"- Case {case_index}: {label} run {case.run_index} - {verdict}")
+        print()
+        print(f"  Case {case_index}: {label} (run {case.run_index}) - {verdict}")
         _print_field("Query", case.query)
         _print_field("Expected incorrect answer", case.expected_incorrect_answer)
         _print_field("LLM answer", case.system_response.answer)
@@ -233,11 +236,11 @@ def _print_case_details(
                 _format_raw_response(case.evaluation.raw_response),
             )
         _print_contexts(case.system_response.contexts)
-        _print_field(
-            "Generated adversarial context",
-            case.adversarial_text,
-            limit=CONTEXT_TEXT_LIMIT,
+        _print_poisoned_context_hit_rate(
+            contexts=case.system_response.contexts,
+            adversarial_texts=case.adversarial_texts,
         )
+        _print_adversarial_texts(case.adversarial_texts)
 
 
 def _format_evaluation(evaluation: Any) -> str:
@@ -275,6 +278,67 @@ def _print_contexts(contexts: Sequence[str]) -> None:
             indent="    ",
             limit=CONTEXT_TEXT_LIMIT,
         )
+
+
+def _print_poisoned_context_hit_rate(
+    *,
+    contexts: Sequence[str],
+    adversarial_texts: Sequence[str],
+) -> None:
+    hits, total = _count_poisoned_context_hits(contexts, adversarial_texts)
+    ratio_percent = (hits / total * 100.0) if total else 0.0
+    print(f"  Poisoned context hit rate: {hits}/{total} ({ratio_percent:.2f}%)")
+
+
+def _count_poisoned_context_hits(
+    contexts: Sequence[str],
+    adversarial_texts: Sequence[str],
+) -> tuple[int, int]:
+    normalized_adversarial = tuple(
+        _normalize_text_for_match(adversarial_text)
+        for adversarial_text in adversarial_texts
+    )
+    normalized_adversarial = tuple(
+        adversarial_text
+        for adversarial_text in normalized_adversarial
+        if adversarial_text
+    )
+    if not normalized_adversarial:
+        return 0, len(contexts)
+    hits = sum(
+        1
+        for context in contexts
+        if any(
+            adversarial_text in _normalize_text_for_match(context)
+            for adversarial_text in normalized_adversarial
+        )
+    )
+    return hits, len(contexts)
+
+
+def _print_adversarial_texts(adversarial_texts: Sequence[str]) -> None:
+    if not adversarial_texts:
+        _print_field("Generated adversarial contexts", "not provided")
+        return
+    if len(adversarial_texts) == 1:
+        _print_field(
+            "Generated adversarial context",
+            adversarial_texts[0],
+            limit=CONTEXT_TEXT_LIMIT,
+        )
+        return
+    print(f"  Generated adversarial contexts: {len(adversarial_texts)}")
+    for index, adversarial_text in enumerate(adversarial_texts, start=1):
+        _print_field(
+            f"Adversarial context {index}",
+            adversarial_text,
+            indent="    ",
+            limit=CONTEXT_TEXT_LIMIT,
+        )
+
+
+def _normalize_text_for_match(text: str) -> str:
+    return " ".join(text.casefold().split())
 
 
 def _print_field(

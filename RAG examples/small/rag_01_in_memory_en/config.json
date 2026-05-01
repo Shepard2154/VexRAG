@@ -2,7 +2,7 @@
   "dataset": "benchmark.jsonl",
   "contexts_dir": "contexts",
   "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
-  "top_k": 2,
+  "top_k": 5,
   "host": "0.0.0.0",
   "port": 8080,
   "llm": {

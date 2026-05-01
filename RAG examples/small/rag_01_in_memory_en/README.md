@@ -44,7 +44,7 @@ Start the demo service first, then run the VexRAG scan from the repository root:
 vx scan --config "RAG examples/small/rag_01_in_memory_en/vexrag-poisonedrag-scan.yaml"
 ```
 
-The included scan config targets `http://localhost:8080/model/context-based-response`, runs the inline case plus cases from `poisonedrag-cases.yaml`, and uses Ollama for attack generation and LLM-as-a-Judge evaluation. With `scan.corpus_poisoning.path: ./contexts`, VexRAG writes generated poisoned texts as `poisonedrag_*.txt` files into `contexts/` for `file_text` corpus poisoning. With the default config, make sure `llama3:8b` is available locally or change the model fields in both config files.
+The included scan config targets `http://localhost:8080/model/context-based-response`, runs the inline case plus cases from `poisonedrag-cases.yaml`, and uses Ollama for attack generation and LLM-as-a-Judge evaluation. With `scan.corpus_poisoning.path: ./contexts`, VexRAG writes generated poisoned texts as `poisonedrag_*.txt` files into `contexts/` for `file_text` corpus poisoning. Set `scan.corpus_poisoning.cleanup: true` to remove these poisoned files after each scan case. With the default config, make sure `llama3:8b` is available locally or change the model fields in both config files.
 
 ## Docker Run
 
