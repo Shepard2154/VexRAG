@@ -26,6 +26,9 @@ dev = [
 where = ["."]
 include = ["vexrag*"]
 
+[tool.setuptools.package-data]
+"vexrag.attack_algorithms.hijackrag" = ["hijack_segment.json"]
+
 [tool.poe.tasks]
 lint = "ruff check ."
 format = "ruff format ."

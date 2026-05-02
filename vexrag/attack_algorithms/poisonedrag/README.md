@@ -17,7 +17,7 @@ Use `original` for baseline behavior and comparability; use `aggressive`/`soft` 
 
 ## Automatic Case Generation
 
-Generate a ready-to-use YAML file with `cases:` entries (`id`, `query`, `correct_answer`, `target_incorrect_answer`) and plug it into `attack.poisonedrag.case_files`:
+The CLI command `vx generate-cases` also supports HijackRAG when the scan YAML defines `attack.hijackrag` (use `--attack` if both attacks are present). For PoisonedRAG, generate a ready-to-use YAML with `cases:` entries (`id`, `query`, `correct_answer`, `target_incorrect_answer`) and plug it into `attack.poisonedrag.case_files`:
 
 ```bash
 vx generate-cases \

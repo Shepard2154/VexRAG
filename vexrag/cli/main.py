@@ -7,7 +7,12 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from vexrag.cli.errors import CLIConfigError
-from vexrag.cli.scan_builder import build_poisonedrag_case_generator, build_scan_command
+from vexrag.cli.scan_builder import (
+    build_hijackrag_case_generator,
+    build_poisonedrag_case_generator,
+    build_scan_command,
+    resolve_generate_cases_attack,
+)
 
 LOGGER = logging.getLogger("vexrag.cli")
 FIELD_TEXT_LIMIT = 2_000
@@ -86,9 +91,15 @@ def _build_parser() -> argparse.ArgumentParser:
 
     generate_cases = subcommands.add_parser(
         "generate-cases",
-        help="Generate PoisonedRAG cases file from LLM.",
+        help="Generate PoisonedRAG or HijackRAG cases YAML via the scan config LLM.",
     )
     _add_config_argument(generate_cases)
+    generate_cases.add_argument(
+        "--attack",
+        choices=("auto", "poisonedrag", "hijackrag"),
+        default="auto",
+        help="Which attack block to use from the YAML (default: auto — single attack block).",
+    )
     generate_cases.add_argument(
         "--output",
         required=True,
@@ -111,7 +122,14 @@ def _build_parser() -> argparse.ArgumentParser:
         "--target-style",
         choices=("short_fact", "paragraph"),
         default="short_fact",
-        help="Style for generated correct/incorrect answers.",
+        help="Style for correct answers (PoisonedRAG: also incorrect answers; HijackRAG: anchor).",
+    )
+    generate_cases.add_argument(
+        "--adv-per-query",
+        type=int,
+        default=1,
+        metavar="N",
+        help="HijackRAG only: adv_per_query per case in the YAML (default: 1). Ignored for PoisonedRAG.",
     )
     generate_cases.add_argument(
         "--seed",
@@ -176,6 +194,8 @@ def _run_generate_cases(args: argparse.Namespace) -> int:
     _configure_logging(quiet=args.quiet, debug=args.debug)
     LOGGER.info("Loading generation config: %s", args.config)
     config = _load_config(args.config)
+    explicit = None if args.attack == "auto" else args.attack
+    attack_kind = resolve_generate_cases_attack(config, explicit=explicit)
     output_path = args.output.expanduser()
     if not output_path.is_absolute():
         output_path = Path.cwd() / output_path
@@ -183,33 +203,58 @@ def _run_generate_cases(args: argparse.Namespace) -> int:
         raise CLIConfigError(
             f"output file already exists: {output_path}. Use --overwrite to replace it."
         )
-    LOGGER.info("Building PoisonedRAG automatic case generator")
-    generator = build_poisonedrag_case_generator(config)
-    LOGGER.info(
-        "Generating %d automatic case(s) [target_style=%s]",
-        args.count,
-        args.target_style,
-    )
-    cases = generator.generate_cases(
-        count=args.count,
-        topic=args.topic,
-        target_style=args.target_style,
-        seed=args.seed,
-    )
-    payload = {"cases": [_request_to_case_mapping(case) for case in cases]}
+    if attack_kind == "poisonedrag":
+        LOGGER.info("Building PoisonedRAG automatic case generator")
+        generator = build_poisonedrag_case_generator(config)
+        LOGGER.info(
+            "Generating %d PoisonedRAG case(s) [target_style=%s]",
+            args.count,
+            args.target_style,
+        )
+        cases = generator.generate_cases(
+            count=args.count,
+            topic=args.topic,
+            target_style=args.target_style,
+            seed=args.seed,
+        )
+        payload = {"cases": [_poisonedrag_case_mapping(case) for case in cases]}
+        yaml_attack = "poisonedrag"
+    else:
+        LOGGER.info("Building HijackRAG automatic case generator")
+        generator = build_hijackrag_case_generator(config)
+        adv = int(args.adv_per_query)
+        if adv < 1:
+            raise CLIConfigError("--adv-per-query must be at least 1")
+        LOGGER.info(
+            "Generating %d HijackRAG case(s) [target_style=%s, adv_per_query=%d]",
+            args.count,
+            args.target_style,
+            adv,
+        )
+        cases = generator.generate_cases(
+            count=args.count,
+            topic=args.topic,
+            target_style=args.target_style,
+            adv_per_query=adv,
+            seed=args.seed,
+        )
+        payload = {"cases": [_hijackrag_case_mapping(case) for case in cases]}
+        yaml_attack = "hijackrag"
+
     _write_yaml(output_path, payload)
     if args.quiet:
         print(output_path)
         return 0
 
-    print("Generated PoisonedRAG cases")
+    label = "PoisonedRAG" if yaml_attack == "poisonedrag" else "HijackRAG"
+    print(f"Generated {label} cases")
     print(f"Output: {output_path}")
     print(f"Cases: {len(cases)}")
     if args.topic:
         print(f"Topic: {args.topic}")
     print()
     print("Use in config:")
-    print(f"  attack.poisonedrag.case_files: ['{output_path}']")
+    print(f"  attack.{yaml_attack}.case_files: ['{output_path}']")
     return 0
 
 
@@ -301,10 +346,10 @@ def _write_yaml(path: Path, content: Mapping[str, Any]) -> None:
         raise CLIConfigError(f"could not write YAML output file: {path}") from exc
 
 
-def _request_to_case_mapping(request: Any) -> Mapping[str, str]:
+def _poisonedrag_case_mapping(request: Any) -> Mapping[str, str]:
     case_id = str(getattr(request, "case_id", "") or "").strip()
     query = str(getattr(request, "query", "")).strip()
-    correct_answer = str(getattr(request, "correct_answer", "")).strip()
+    correct_answer = str(getattr(request, "correct_answer", "") or "").strip()
     target_incorrect_answer = str(
         getattr(request, "target_incorrect_answer", "") or ""
     ).strip()
@@ -318,6 +363,29 @@ def _request_to_case_mapping(request: Any) -> Mapping[str, str]:
         "correct_answer": correct_answer,
         "target_incorrect_answer": target_incorrect_answer,
     }
+
+
+def _hijackrag_case_mapping(request: Any) -> Mapping[str, Any]:
+    case_id = str(getattr(request, "case_id", "") or "").strip()
+    query = str(getattr(request, "query", "") or "").strip()
+    correct_answer = str(getattr(request, "correct_answer", "") or "").strip()
+    hijack_insert = str(getattr(request, "hijack_insert", "") or "").strip()
+    adv_per_query = int(getattr(request, "adv_per_query", 1) or 1)
+    if not query or not correct_answer or not hijack_insert:
+        raise CLIConfigError("generated HijackRAG case is missing required fields")
+    if not case_id:
+        case_id = f"generated_case_{abs(hash(query)) % 1_000_000}"
+    row: dict[str, Any] = {
+        "id": case_id,
+        "query": query,
+        "correct_answer": correct_answer,
+        "hijack_insert": hijack_insert,
+        "adv_per_query": adv_per_query,
+    }
+    seed = getattr(request, "seed", None)
+    if seed is not None:
+        row["seed"] = int(seed)
+    return row
 
 
 def _print_report(

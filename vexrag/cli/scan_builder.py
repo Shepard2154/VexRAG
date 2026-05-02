@@ -4,6 +4,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
+from vexrag.attack_algorithms.hijackrag import (
+    AutomaticHijackRAGCaseGenerator,
+    HijackRAGGenerator,
+    HijackRAGJudgePromptBuilder,
+    HijackRAGRequest,
+    HijackRAGScanConfig,
+    HijackRAGScanRunner,
+    default_hijack_segments_path,
+)
 from vexrag.attack_algorithms.poisonedrag import (
     AutomaticPoisonedRAGCaseGenerator,
     PoisonedRAGGenerator,
@@ -81,11 +90,38 @@ def build_poisonedrag_scan_command(
     )
 
 
+def build_hijackrag_scan_command(
+    config: Mapping[str, Any],
+    base_dir: Path | None = None,
+) -> ScanCommand:
+    """Build a HijackRAG scan command from CLI config."""
+
+    target_system = build_target_system(config)
+    generator = build_hijackrag_generator(
+        config,
+        target_system=target_system,
+        base_dir=base_dir,
+    )
+    evaluation_strategy = build_evaluation_strategy(config, attack="hijackrag")
+    return ConfiguredScanCommand(
+        runner=HijackRAGScanRunner(
+            generator=generator,
+            target_system=target_system,
+            evaluation_strategy=evaluation_strategy,
+            corpus_poisoner=build_corpus_poisoner(config, base_dir=base_dir),
+        ),
+        requests=build_hijackrag_requests(config, base_dir=base_dir),
+        scan_config=build_hijackrag_scan_config(config),
+    )
+
+
 ATTACK_SCAN_BUILDERS: Mapping[str, AttackScanBuilder] = {
+    "hijackrag": build_hijackrag_scan_command,
     "poisonedrag": build_poisonedrag_scan_command,
 }
 
 JUDGE_PROMPT_BUILDERS: Mapping[str, PromptBuilderFactory] = {
+    "hijackrag": HijackRAGJudgePromptBuilder,
     "poisonedrag": PoisonedRAGJudgePromptBuilder,
 }
 
@@ -143,6 +179,89 @@ def build_target_system(config: Mapping[str, Any]) -> HTTPTargetSystemAdapter:
     )
 
 
+def build_hijackrag_generator(
+    config: Mapping[str, Any],
+    *,
+    target_system: HTTPTargetSystemAdapter,
+    base_dir: Path | None = None,
+) -> HijackRAGGenerator:
+    attack_config = _attack_section(config, "hijackrag")
+    llm_client = build_hijackrag_llm_client(config, attack_config=attack_config)
+    segments_path = _hijackrag_segments_path(attack_config, base_dir=base_dir)
+    correct_answer_provider = None
+    if str(attack_config.get("correct_answer_provider", "")).strip() == "target_system":
+        correct_answer_provider = _TargetCorrectAnswerProvider(
+            target_system=target_system,
+            attack="hijackrag",
+        )
+    if not segments_path.is_file():
+        raise CLIConfigError(
+            f"attack.hijackrag segments file not found: {segments_path}"
+        )
+    return HijackRAGGenerator.from_segments_file(
+        segments_path,
+        llm_client,
+        correct_answer_provider=correct_answer_provider,
+    )
+
+
+def build_hijackrag_llm_client(
+    config: Mapping[str, Any],
+    *,
+    attack_config: Mapping[str, Any] | None = None,
+) -> "_JSONLLMClientAdapter":
+    resolved = attack_config or _attack_section(config, "hijackrag")
+    llm_client_config = _attack_llm_client_section(
+        config,
+        resolved,
+        attack="hijackrag",
+    )
+    return _JSONLLMClientAdapter(build_provider_judge_client(llm_client_config))
+
+
+def build_hijackrag_requests(
+    config: Mapping[str, Any],
+    *,
+    base_dir: Path | None = None,
+) -> tuple[HijackRAGRequest, ...]:
+    attack_config = _attack_section(config, "hijackrag")
+    case_configs = [
+        *_inline_case_configs_hijack(attack_config),
+        *_case_file_configs_hijack(attack_config, base_dir=base_dir),
+    ]
+    if not case_configs:
+        raise CLIConfigError(
+            "attack.hijackrag.cases or attack.hijackrag.case_files "
+            "must contain at least one case"
+        )
+    return tuple(
+        _build_hijackrag_request(
+            attack_config,
+            case_config,
+            case_number=case_number,
+        )
+        for case_number, case_config in enumerate(case_configs, start=1)
+    )
+
+
+def build_hijackrag_scan_config(
+    config: Mapping[str, Any],
+) -> HijackRAGScanConfig:
+    scan_config = config.get("scan", {})
+    if not isinstance(scan_config, Mapping):
+        raise CLIConfigError("scan must be a mapping")
+    return HijackRAGScanConfig(
+        repetitions=_int_option(scan_config, "repetitions", 1),
+        attack_success_rate_threshold=_float_option(
+            scan_config,
+            "attack_success_rate_threshold",
+            0.0,
+        ),
+        override_contexts=_bool_option(scan_config, "override_contexts", False),
+        cleanup=_cleanup_option(scan_config),
+    )
+
+
 def build_poisonedrag_generator(
     config: Mapping[str, Any],
     *,
@@ -171,6 +290,50 @@ def build_poisonedrag_case_generator(
     attack_config = _attack_section(config, "poisonedrag")
     llm_client = build_poisonedrag_llm_client(config, attack_config=attack_config)
     return AutomaticPoisonedRAGCaseGenerator(llm_client=llm_client)
+
+
+def build_hijackrag_case_generator(
+    config: Mapping[str, Any],
+) -> AutomaticHijackRAGCaseGenerator:
+    attack_config = _attack_section(config, "hijackrag")
+    llm_client = build_hijackrag_llm_client(config, attack_config=attack_config)
+    return AutomaticHijackRAGCaseGenerator(llm_client=llm_client)
+
+
+def resolve_generate_cases_attack(
+    config: Mapping[str, Any],
+    *,
+    explicit: str | None,
+) -> str:
+    """Return ``poisonedrag`` or ``hijackrag`` for ``vx generate-cases``."""
+
+    if explicit not in (None, "", "auto"):
+        name = str(explicit).strip().lower()
+        if name not in {"poisonedrag", "hijackrag"}:
+            raise CLIConfigError(
+                f"--attack must be poisonedrag, hijackrag, or auto (got {explicit!r})"
+            )
+        _attack_section(config, name)
+        return name
+
+    attack = config.get("attack")
+    if not isinstance(attack, Mapping):
+        raise CLIConfigError("attack must be configured in the scan YAML")
+
+    has_poison = isinstance(attack.get("poisonedrag"), Mapping)
+    has_hijack = isinstance(attack.get("hijackrag"), Mapping)
+    if has_poison and has_hijack:
+        raise CLIConfigError(
+            "attack defines both poisonedrag and hijackrag; "
+            "pass --attack poisonedrag or --attack hijackrag"
+        )
+    if has_poison:
+        return "poisonedrag"
+    if has_hijack:
+        return "hijackrag"
+    raise CLIConfigError(
+        "attack must include attack.poisonedrag or attack.hijackrag for generate-cases"
+    )
 
 
 def build_poisonedrag_llm_client(
@@ -240,6 +403,115 @@ def _build_poisonedrag_request(
         poisoning_style=_poisoning_style_option(
             case_config,
             default=_poisoning_style_option(attack_config),
+            prefix=prefix,
+        ),
+        seed=_optional_int(
+            case_config.get("seed", attack_config.get("seed")),
+            f"{prefix}.seed",
+        ),
+    )
+
+
+def _hijackrag_segments_path(
+    attack_config: Mapping[str, Any],
+    *,
+    base_dir: Path | None,
+) -> Path:
+    raw = attack_config.get("segments_file")
+    if raw in (None, ""):
+        return default_hijack_segments_path()
+    if not isinstance(raw, str) or not raw.strip():
+        raise CLIConfigError(
+            "attack.hijackrag.segments_file must be a non-empty string when set"
+        )
+    path = Path(raw.strip())
+    if not path.is_absolute() and base_dir is not None:
+        path = base_dir / path
+    if not path.is_file():
+        raise CLIConfigError(f"attack.hijackrag.segments_file not found: {path}")
+    return path
+
+
+def _inline_case_configs_hijack(
+    attack_config: Mapping[str, Any],
+) -> tuple[Mapping[str, Any], ...]:
+    raw_cases = attack_config.get("cases", ())
+    return _case_configs_from_value(raw_cases, "attack.hijackrag.cases")
+
+
+def _case_file_configs_hijack(
+    attack_config: Mapping[str, Any],
+    *,
+    base_dir: Path | None,
+) -> tuple[Mapping[str, Any], ...]:
+    file_paths = [
+        *_path_strings_from_value(
+            attack_config.get("case_files", ()),
+            "attack.hijackrag.case_files",
+        ),
+        *_path_strings_from_value(
+            attack_config.get("cases_file", ()),
+            "attack.hijackrag.cases_file",
+        ),
+    ]
+    cases: list[Mapping[str, Any]] = []
+    for file_path in file_paths:
+        cases.extend(_load_case_configs(file_path, base_dir=base_dir))
+    return tuple(cases)
+
+
+def _hijack_segment_ids_from_case(
+    case_config: Mapping[str, Any],
+    prefix: str,
+) -> tuple[str, ...]:
+    raw = case_config.get("segment_ids", ())
+    if raw in (None, "", ()):
+        return ()
+    if isinstance(raw, str):
+        stripped = raw.strip()
+        return (stripped,) if stripped else ()
+    if isinstance(raw, bytes):
+        raise CLIConfigError(
+            f"{prefix}.segment_ids must be a string or a list of strings"
+        )
+    if not isinstance(raw, Sequence):
+        raise CLIConfigError(
+            f"{prefix}.segment_ids must be a string or a list of strings"
+        )
+    ids: list[str] = []
+    for index, item in enumerate(raw, start=1):
+        if not isinstance(item, str) or not item.strip():
+            raise CLIConfigError(
+                f"{prefix}.segment_ids[{index}] must be a non-empty string"
+            )
+        ids.append(item.strip())
+    return tuple(ids)
+
+
+def _build_hijackrag_request(
+    attack_config: Mapping[str, Any],
+    case_config: Mapping[str, Any],
+    *,
+    case_number: int,
+) -> HijackRAGRequest:
+    prefix = f"attack.hijackrag.cases[{case_number}]"
+    insert_raw = case_config.get("hijack_insert", case_config.get("insert_prompt"))
+    if not isinstance(insert_raw, str) or not insert_raw.strip():
+        raise CLIConfigError(f"{prefix}.hijack_insert is required")
+    return HijackRAGRequest(
+        query=_required_string(case_config, "query", prefix),
+        case_id=_optional_string(case_config.get("case_id", case_config.get("id"))),
+        hijack_insert=insert_raw.strip(),
+        correct_answer=_optional_string(case_config.get("correct_answer")),
+        adv_per_query=_int_option(
+            case_config,
+            "adv_per_query",
+            _int_option(attack_config, "adv_per_query", 3),
+        ),
+        segment_ids=_hijack_segment_ids_from_case(case_config, prefix),
+        target_style=_target_style_option(
+            case_config,
+            default=_target_style_option(attack_config, prefix="attack.hijackrag"),
             prefix=prefix,
         ),
         seed=_optional_int(
@@ -403,7 +675,15 @@ def build_corpus_poisoner(
         "scan.corpus_poisoning.file_text",
         base_dir=base_dir,
     )
-    return FileTextCorpusPoisoningAdapter(path=corpus_path)
+    prefix_raw = poison_config.get("filename_prefix", "poisonedrag")
+    if not isinstance(prefix_raw, str) or not prefix_raw.strip():
+        filename_prefix = "poisonedrag"
+    else:
+        filename_prefix = prefix_raw.strip()
+    return FileTextCorpusPoisoningAdapter(
+        path=corpus_path,
+        filename_prefix=filename_prefix,
+    )
 
 
 def build_evaluation_strategy(

@@ -136,7 +136,9 @@ class SmallRAG:
     def _reload_extra_contexts(self) -> None:
         if self.extra_contexts_dir is None:
             return
-        context_files = tuple(sorted(self.extra_contexts_dir.glob("poisonedrag_*.txt")))
+        poison_paths = sorted(self.extra_contexts_dir.glob("poisonedrag_*.txt"))
+        hijack_paths = sorted(self.extra_contexts_dir.glob("hijackrag_*.txt"))
+        context_files = tuple(sorted(set(poison_paths) | set(hijack_paths)))
         if context_files == self._extra_context_files:
             return
 

@@ -44,20 +44,31 @@ Start the demo service first, then run the VexRAG scan from the repository root:
 vx scan --config "RAG examples/small/rag_01_in_memory_en/scan_configs_examples/vexrag-poisonedrag-llm-judge-ollama-llama3-8b.yaml"
 ```
 
+HijackRAG (two-pass): run the LLM-judge scan first, then the stricter embedding-based pass on the same cases:
+
+```bash
+vx scan --config "RAG examples/small/rag_01_in_memory_en/scan_configs_examples/vexrag-hijackrag-llm-judge-ollama-llama3-8b.yaml"
+vx scan --config "RAG examples/small/rag_01_in_memory_en/scan_configs_examples/vexrag-hijackrag-semantic-similarity-ollama-nomic.yaml"
+```
+
 The included scan configs are kept in `scan_configs_examples/` and target `http://localhost:8080/model/context-based-response`.
 - `scan_configs_examples/vexrag-poisonedrag-llm-judge-ollama-llama3-8b.yaml` uses `evaluation.strategy: llm_judge`.
 - `scan_configs_examples/vexrag-poisonedrag-llm-judge-vllm-gemma-3-27b-it-original.yaml` is the Gemma baseline (`poisoning_style: original`).
 - `scan_configs_examples/vexrag-poisonedrag-llm-judge-vllm-gemma-3-27b-it-aggressive.yaml` keeps the same setup with stronger injection (`poisoning_style: aggressive`).
 - `scan_configs_examples/vexrag-poisonedrag-semantic-similarity-vllm-gemma-3-27b-it-original.yaml` uses `evaluation.strategy: semantic_similarity`.
 - `scan_configs_examples/vexrag-poisonedrag-semantic-similarity-ollama-llama3-8b.yaml` is the same strategy with Ollama (`llama3:8b`) and `nomic-embed-text:latest` embeddings.
+- `scan_configs_examples/vexrag-hijackrag-llm-judge-ollama-llama3-8b.yaml` — HijackRAG with `llm_judge` (first pass).
+- `scan_configs_examples/vexrag-hijackrag-semantic-similarity-ollama-nomic.yaml` — HijackRAG second pass: `semantic_similarity` with tighter thresholds than the PoisonedRAG Ollama example (stricter attack vs clean separation).
 - `scan_configs_examples/vexrag-poisonedrag-llm-judge-vllm-gemma-3-27b-it-soft.yaml` uses `poisoning_style: soft` on Gemma.
 - `scan_configs_examples/vexrag-poisonedrag-llm-judge-vllm-qwen3-30b-a3b-instruct-2507.yaml` uses vLLM (`Qwen/Qwen3-30B-A3B-Instruct-2507`) at `http://localhost:8000/v1` by default.
 Case files are grouped in `scan_configs_examples/cases/`.
-With `scan.corpus_poisoning.path: ../contexts`, VexRAG writes generated poisoned texts as `poisonedrag_*.txt` files into `contexts/` for `file_text` corpus poisoning. Set `scan.corpus_poisoning.cleanup: true` to remove these poisoned files after each scan case.
+With `scan.corpus_poisoning.path: ../contexts`, VexRAG writes generated texts as `poisonedrag_*.txt` or `hijackrag_*.txt` (see `scan.corpus_poisoning.filename_prefix`) into `contexts/` for `file_text` corpus poisoning. Set `scan.corpus_poisoning.cleanup: true` to remove these files after each scan case.
 
-### Automatic PoisonedRAG Cases
+### Automatic case YAML (`vx generate-cases`)
 
-You can auto-generate a `cases:` file compatible with `attack.poisonedrag.case_files`:
+Use the same scan YAML as for a real run: `attack.<name>.llm_client` drives the LLM. With a single attack block in the file, `--attack auto` (default) picks it; if both `poisonedrag` and `hijackrag` are present, pass `--attack poisonedrag` or `--attack hijackrag`.
+
+**PoisonedRAG** — `cases:` entries with `id`, `query`, `correct_answer`, `target_incorrect_answer`:
 
 ```bash
 vx generate-cases \
@@ -68,14 +79,30 @@ vx generate-cases \
   --overwrite
 ```
 
-Then reference it in your scan config:
-
 ```yaml
 attack:
   poisonedrag:
     poisoning_style: original
     case_files:
       - ./cases/poisonedrag-cases-auto.yaml
+```
+
+**HijackRAG** — `id`, `query`, `correct_answer`, `hijack_insert` (plus `adv_per_query` / `seed` when set). Optional `--adv-per-query` (default `1`) matches typical one-poison-per-query scans.
+
+```bash
+vx generate-cases \
+  --config "RAG examples/small/rag_01_in_memory_en/scan_configs_examples/vexrag-hijackrag-semantic-similarity-ollama-nomic.yaml" \
+  --output "RAG examples/small/rag_01_in_memory_en/scan_configs_examples/cases/hijackrag-cases-auto.yaml" \
+  --count 6 \
+  --topic "enterprise RAG and database-resident retrieval" \
+  --overwrite
+```
+
+```yaml
+attack:
+  hijackrag:
+    case_files:
+      - ./cases/hijackrag-cases-auto.yaml
 ```
 
 ## Docker Run
