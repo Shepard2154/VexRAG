@@ -49,7 +49,9 @@ The included scan configs are kept in `scan_configs_examples/` and target `http:
 - `scan_configs_examples/vexrag-poisonedrag-llm-judge-vllm-gemma-3-27b-it-original.yaml` is the Gemma baseline (`poisoning_style: original`).
 - `scan_configs_examples/vexrag-poisonedrag-llm-judge-vllm-gemma-3-27b-it-aggressive.yaml` keeps the same setup with stronger injection (`poisoning_style: aggressive`).
 - `scan_configs_examples/vexrag-poisonedrag-semantic-similarity-vllm-gemma-3-27b-it-original.yaml` uses `evaluation.strategy: semantic_similarity`.
-- `scan_configs_examples/vexrag-poisonedrag-llm-judge-vllm-qwen3-30b-a3b-instruct-2507.yaml` uses vLLM (`Qwen/Qwen3-30B-A3B-Instruct-2507`) via OpenAI-compatible API.
+- `scan_configs_examples/vexrag-poisonedrag-semantic-similarity-ollama-llama3-8b.yaml` is the same strategy with Ollama (`llama3:8b`) and `nomic-embed-text:latest` embeddings.
+- `scan_configs_examples/vexrag-poisonedrag-llm-judge-vllm-gemma-3-27b-it-soft.yaml` uses `poisoning_style: soft` on Gemma.
+- `scan_configs_examples/vexrag-poisonedrag-llm-judge-vllm-qwen3-30b-a3b-instruct-2507.yaml` uses vLLM (`Qwen/Qwen3-30B-A3B-Instruct-2507`) at `http://localhost:8000/v1` by default.
 Case files are grouped in `scan_configs_examples/cases/`.
 With `scan.corpus_poisoning.path: ../contexts`, VexRAG writes generated poisoned texts as `poisonedrag_*.txt` files into `contexts/` for `file_text` corpus poisoning. Set `scan.corpus_poisoning.cleanup: true` to remove these poisoned files after each scan case.
 
