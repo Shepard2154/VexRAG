@@ -1,9 +1,9 @@
 from dataclasses import dataclass, field
 from typing import Literal
 
-TargetStyle = Literal["short_fact", "paragraph"]
+from vexrag.core.contracts import CorrectAnswerSource, PoisonedResult, TargetStyle
+
 PoisoningStyle = Literal["original", "aggressive", "soft"]
-CorrectAnswerSource = Literal["provided", "target_system", "llm_generated"]
 
 
 @dataclass(slots=True)
@@ -11,9 +11,9 @@ class PoisonedRAGRequest:
     """Input contract for generating PoisonedRAG candidates."""
 
     query: str
-    case_id: str | None = None
     correct_answer: str | None = None
     target_incorrect_answer: str | None = None
+    case_id: str | None = None
     adv_per_query: int = 3
     target_style: TargetStyle = "short_fact"
     poisoning_style: PoisoningStyle = "original"
@@ -40,7 +40,7 @@ class PoisonedRAGMeta:
 
 
 @dataclass(slots=True)
-class PoisonedRAGResult:
+class PoisonedRAGResult(PoisonedResult):
     """Output contract returned by PoisonedRAG generation API."""
 
     query: str

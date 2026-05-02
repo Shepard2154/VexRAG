@@ -22,7 +22,7 @@ The CLI command `vx generate-cases` also supports HijackRAG when the scan YAML d
 ```bash
 vx generate-cases \
   --config "RAG examples/small/rag_01_in_memory_en/scan_configs_examples/vexrag-poisonedrag-llm-judge-vllm-gemma-3-27b-it-original.yaml" \
-  --output "RAG examples/small/rag_01_in_memory_en/scan_configs_examples/cases/poisonedrag-cases-auto.yaml" \
+  --output "RAG examples/small/rag_01_in_memory_en/scan_configs_examples/cases/generated.yaml" \
   --count 8 \
   --topic "enterprise RAG security and governance" \
   --overwrite

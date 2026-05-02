@@ -1,44 +1,36 @@
-import json
 import random
 import re
 from typing import Any
 
+from vexrag.core.llm_response_validation import (
+    LLMPayloadValidationError,
+)
+from vexrag.core.llm_response_validation import (
+    coerce_payload_to_dict as _coerce_payload_to_dict,
+)
+from vexrag.core.llm_response_validation import (
+    validate_correct_answer_payload as _core_validate_correct_answer,
+)
 
-class PoisonedRAGValidationError(ValueError):
+
+class PoisonedRAGValidationError(LLMPayloadValidationError):
     """Raised when an LLM payload does not match expected schema."""
 
 
 def coerce_payload_to_dict(payload: Any) -> dict[str, Any]:
     """Convert payload to dictionary, accepting dict or JSON string."""
-    if isinstance(payload, dict):
-        return payload
-    if isinstance(payload, str):
-        try:
-            parsed = json.loads(payload)
-        except json.JSONDecodeError as exc:
-            raise PoisonedRAGValidationError("LLM response is not valid JSON.") from exc
-        if not isinstance(parsed, dict):
-            raise PoisonedRAGValidationError("LLM response must be a JSON object.")
-        return parsed
-    raise PoisonedRAGValidationError("Unsupported LLM response payload type.")
+    try:
+        return _coerce_payload_to_dict(payload)
+    except LLMPayloadValidationError as exc:
+        raise PoisonedRAGValidationError(str(exc)) from exc
 
 
 def validate_correct_answer_payload(payload: Any) -> str:
     """Extract stage-1 correct answer from payload."""
-    data = coerce_payload_to_dict(payload)
-    correct_answer = _first_present_string(
-        data,
-        (
-            "correct_answer",
-            "correct answer",
-            "correctAnswer",
-        ),
-    )
-    if not isinstance(correct_answer, str) or not correct_answer.strip():
-        raise PoisonedRAGValidationError(
-            "Field 'correct_answer' must be non-empty string."
-        )
-    return correct_answer.strip()
+    try:
+        return _core_validate_correct_answer(payload)
+    except LLMPayloadValidationError as exc:
+        raise PoisonedRAGValidationError(str(exc)) from exc
 
 
 def validate_poison_payload(payload: Any) -> tuple[str, list[str]]:

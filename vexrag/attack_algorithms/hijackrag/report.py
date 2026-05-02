@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 
+from vexrag.core.contracts import ScanVerdict
 from vexrag.core.evaluation import EvaluationResult
-from vexrag.core.scan import ScanVerdict
 from vexrag.core.target import TargetSystemResponse
 
 

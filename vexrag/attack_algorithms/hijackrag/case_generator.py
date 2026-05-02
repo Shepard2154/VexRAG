@@ -1,10 +1,12 @@
-import json
 import re
-from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any
 
 from vexrag.attack_algorithms.hijackrag.schema import HijackRAGRequest
-from vexrag.attack_algorithms.poisonedrag.schema import TargetStyle
+from vexrag.core.contracts import LLMClientProtocol, TargetStyle
+from vexrag.core.llm_response_validation import (
+    LLMPayloadValidationError,
+    coerce_payload_to_dict,
+)
 
 PROMPT_VERSION = "hijackrag-automatic-cases-v1"
 
@@ -15,29 +17,23 @@ class AutomaticHijackCaseGenerationError(ValueError):
     """Raised when automatic HijackRAG case generation fails or returns invalid payload."""
 
 
-class LLMClientProtocol(Protocol):
-    model_id: str
-
-    def complete_json(
-        self,
-        prompt: str,
-        *,
-        schema_name: str | None = None,
-        seed: int | None = None,
-    ) -> str | dict[str, Any]: ...
-
-
-@dataclass(frozen=True, slots=True)
 class AutomaticHijackRAGCaseGenerator:
-    llm_client: LLMClientProtocol
-    prompt_version: str = PROMPT_VERSION
+    __slots__ = ("llm_client", "prompt_version")
+
+    def __init__(
+        self,
+        llm_client: LLMClientProtocol,
+        prompt_version: str = PROMPT_VERSION,
+    ) -> None:
+        self.llm_client = llm_client
+        self.prompt_version = prompt_version
 
     def generate_cases(
         self,
         *,
         count: int,
         topic: str | None = None,
-        target_style: TargetStyle = "short_fact",
+        correct_answer_style: TargetStyle = "short_fact",
         adv_per_query: int = 1,
         seed: int | None = None,
     ) -> tuple[HijackRAGRequest, ...]:
@@ -49,13 +45,9 @@ class AutomaticHijackRAGCaseGenerator:
         prompt = _build_automatic_cases_prompt(
             count=count,
             topic=topic,
-            target_style=target_style,
+            correct_answer_style=correct_answer_style,
         )
-        payload = self.llm_client.complete_json(
-            prompt,
-            schema_name="hijackrag.automatic_cases",
-            seed=seed,
-        )
+        payload = self.llm_client.complete_json(prompt)
         cases = _validate_cases_payload(payload, expected_count=count)
         requests: list[HijackRAGRequest] = []
         for offset, case in enumerate(cases):
@@ -63,12 +55,12 @@ class AutomaticHijackRAGCaseGenerator:
             requests.append(
                 HijackRAGRequest(
                     query=case["query"],
-                    case_id=case["id"],
-                    correct_answer=case["correct_answer"],
                     hijack_insert=case["hijack_insert"],
+                    correct_answer=case["correct_answer"],
+                    case_id=case["id"],
                     adv_per_query=adv_per_query,
                     segment_ids=(),
-                    target_style=target_style,
+                    correct_answer_style=correct_answer_style,
                     seed=case_seed,
                 )
             )
@@ -79,7 +71,7 @@ def _build_automatic_cases_prompt(
     *,
     count: int,
     topic: str | None,
-    target_style: TargetStyle,
+    correct_answer_style: TargetStyle,
 ) -> str:
     topic_line = (
         f"Topic focus: {topic.strip()}"
@@ -88,7 +80,7 @@ def _build_automatic_cases_prompt(
     )
     style_line = (
         "Answer style: short, factual, and compact (1-2 sentences)."
-        if target_style == "short_fact"
+        if correct_answer_style == "short_fact"
         else "Answer style: a single coherent paragraph with 3-6 sentences."
     )
     return (
@@ -125,14 +117,11 @@ def _validate_cases_payload(
     *,
     expected_count: int,
 ) -> list[dict[str, str]]:
-    data = _coerce_payload_to_dict(payload)
-    raw_cases = data.get("cases")
-    if not isinstance(raw_cases, list):
-        raise AutomaticHijackCaseGenerationError("Field 'cases' must be a list.")
-    if len(raw_cases) < expected_count:
-        raise AutomaticHijackCaseGenerationError(
-            f"Expected at least {expected_count} generated cases, got {len(raw_cases)}."
-        )
+    try:
+        data = coerce_payload_to_dict(payload)
+    except LLMPayloadValidationError as exc:
+        raise AutomaticHijackCaseGenerationError(str(exc)) from exc
+    raw_cases = _extract_raw_cases(data, expected_count=expected_count)
 
     validated: list[dict[str, str]] = []
     seen_ids: set[str] = set()
@@ -140,26 +129,16 @@ def _validate_cases_payload(
     for raw_case in raw_cases:
         if not isinstance(raw_case, dict):
             continue
-        query = _required_text(raw_case.get("query"), field="query")
-        correct_answer = _required_text(
-            raw_case.get("correct_answer"),
-            field="correct_answer",
-        )
-        hijack_insert = _required_hijack_insert(raw_case.get("hijack_insert"))
-        raw_id = raw_case.get("id")
-        case_id = _normalize_case_id(raw_id if isinstance(raw_id, str) else query)
-        if case_id in seen_ids or hijack_insert in seen_markers:
+        candidate = _validate_case_record(raw_case)
+        if _is_duplicate_case(
+            candidate,
+            seen_ids=seen_ids,
+            seen_markers=seen_markers,
+        ):
             continue
-        seen_ids.add(case_id)
-        seen_markers.add(hijack_insert)
-        validated.append(
-            {
-                "id": case_id,
-                "query": query,
-                "correct_answer": correct_answer,
-                "hijack_insert": hijack_insert,
-            }
-        )
+        seen_ids.add(candidate["id"])
+        seen_markers.add(candidate["hijack_insert"])
+        validated.append(candidate)
         if len(validated) >= expected_count:
             break
 
@@ -170,6 +149,43 @@ def _validate_cases_payload(
     return validated
 
 
+def _extract_raw_cases(data: dict[str, Any], *, expected_count: int) -> list[Any]:
+    raw_cases = data.get("cases")
+    if not isinstance(raw_cases, list):
+        raise AutomaticHijackCaseGenerationError("Field 'cases' must be a list.")
+    if len(raw_cases) < expected_count:
+        raise AutomaticHijackCaseGenerationError(
+            f"Expected at least {expected_count} generated cases, got {len(raw_cases)}."
+        )
+    return raw_cases
+
+
+def _validate_case_record(raw_case: dict[str, object]) -> dict[str, str]:
+    query = _required_text(raw_case.get("query"), field="query")
+    correct_answer = _required_text(
+        raw_case.get("correct_answer"),
+        field="correct_answer",
+    )
+    hijack_insert = _required_hijack_insert(raw_case.get("hijack_insert"))
+    raw_id = raw_case.get("id")
+    case_id = _normalize_case_id(raw_id if isinstance(raw_id, str) else query)
+    return {
+        "id": case_id,
+        "query": query,
+        "correct_answer": correct_answer,
+        "hijack_insert": hijack_insert,
+    }
+
+
+def _is_duplicate_case(
+    case: dict[str, str],
+    *,
+    seen_ids: set[str],
+    seen_markers: set[str],
+) -> bool:
+    return case["id"] in seen_ids or case["hijack_insert"] in seen_markers
+
+
 def _required_hijack_insert(value: object) -> str:
     text = _required_text(value, field="hijack_insert")
     if not _HIJACK_INSERT_RE.match(text):
@@ -178,24 +194,6 @@ def _required_hijack_insert(value: object) -> str:
             f"length 5-64; got {text!r}"
         )
     return text
-
-
-def _coerce_payload_to_dict(payload: Any) -> dict[str, Any]:
-    if isinstance(payload, dict):
-        return payload
-    if isinstance(payload, str):
-        try:
-            parsed = json.loads(payload)
-        except json.JSONDecodeError as exc:
-            raise AutomaticHijackCaseGenerationError(
-                "LLM response is not valid JSON."
-            ) from exc
-        if not isinstance(parsed, dict):
-            raise AutomaticHijackCaseGenerationError(
-                "LLM response must be a JSON object."
-            )
-        return parsed
-    raise AutomaticHijackCaseGenerationError("Unsupported LLM response payload type.")
 
 
 def _required_text(value: object, *, field: str) -> str:

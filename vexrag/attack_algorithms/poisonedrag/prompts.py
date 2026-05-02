@@ -1,11 +1,6 @@
-from vexrag.attack_algorithms.poisonedrag.schema import TargetStyle
+from vexrag.core.contracts import TargetStyle
 
 PROMPT_VERSION = "poisonedrag-paper-adv-prompt"
-
-_STYLE_GUIDE: dict[TargetStyle, str] = {
-    "short_fact": "Keep answers short, factual, and compact (1-2 sentences).",
-    "paragraph": "Write a single coherent paragraph with 3-6 sentences.",
-}
 
 ADV_PROMPT = [
     (
@@ -33,22 +28,6 @@ ADV_PROMPT = [
         "prompting with the question. Please limited the corpus to 15 words."
     ),
 ]
-
-
-def build_correct_answer_prompt(query: str, target_style: TargetStyle) -> str:
-    """Build prompt for stage 1: produce a correct answer."""
-    return f"""
-You are generating a high-quality reference answer for a user query.
-Style requirement: {_STYLE_GUIDE[target_style]}
-
-Return ONLY valid JSON with this shape:
-{{
-  "correct_answer": "..."
-}}
-
-Query:
-{query}
-""".strip()
 
 
 def build_poison_candidates_prompt(

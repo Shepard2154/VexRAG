@@ -5,11 +5,7 @@ from vexrag.attack_algorithms.poisonedrag.case_generator import (
 from vexrag.attack_algorithms.poisonedrag.evaluation import (
     PoisonedRAGJudgePromptBuilder,
 )
-from vexrag.attack_algorithms.poisonedrag.generator import (
-    CorrectAnswerProviderProtocol,
-    LLMClientProtocol,
-    PoisonedRAGGenerator,
-)
+from vexrag.attack_algorithms.poisonedrag.generator import PoisonedRAGGenerator
 from vexrag.attack_algorithms.poisonedrag.prompts import (
     PROMPT_VERSION,
     build_correct_answer_prompt,
@@ -32,6 +28,7 @@ from vexrag.attack_algorithms.poisonedrag.schema import (
     TargetStyle,
 )
 from vexrag.attack_algorithms.poisonedrag.validators import PoisonedRAGValidationError
+from vexrag.core.contracts import CorrectAnswerProviderProtocol, LLMClientProtocol
 
 __all__ = [
     # Evaluation

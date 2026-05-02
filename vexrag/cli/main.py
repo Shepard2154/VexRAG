@@ -4,54 +4,27 @@ import logging
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any
 
 from vexrag.cli.errors import CLIConfigError
 from vexrag.cli.scan_builder import (
-    build_hijackrag_case_generator,
-    build_poisonedrag_case_generator,
     build_scan_command,
     resolve_generate_cases_attack,
 )
+from vexrag.core.attacks import (
+    GenerateCasesParams,
+    default_attack_registry,
+    ensure_builtin_attacks_registered,
+)
+from vexrag.core.attacks.command import (
+    ScanCaseReportProtocol,
+    ScanReportProtocol,
+)
+from vexrag.core.config_errors import ScanConfigError
 
 LOGGER = logging.getLogger("vexrag.cli")
 FIELD_TEXT_LIMIT = 2_000
 CONTEXT_TEXT_LIMIT = 4_000
-
-
-class ScanCaseReportProtocol(Protocol):
-    query: str
-    adversarial_texts: tuple[str, ...]
-    expected_incorrect_answer: str
-    system_response: Any
-    evaluation: Any
-    case_id: str | None
-    run_index: int
-
-    @property
-    def successful(self) -> bool: ...
-
-    @property
-    def warnings(self) -> tuple[str, ...]: ...
-
-
-class ScanVerdictProtocol(Protocol):
-    value: str
-
-
-class ScanReportProtocol(Protocol):
-    verdict: ScanVerdictProtocol
-    cases: tuple[ScanCaseReportProtocol, ...]
-    warnings: tuple[str, ...]
-
-    @property
-    def success_rate(self) -> float: ...
-
-    @property
-    def successful_cases(self) -> int: ...
-
-    @property
-    def total_cases(self) -> int: ...
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -59,7 +32,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return args.handler(args)
-    except (CLIConfigError, ValueError, RuntimeError) as exc:
+    except (ScanConfigError, ValueError, RuntimeError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 2
 
@@ -94,11 +67,17 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Generate PoisonedRAG or HijackRAG cases YAML via the scan config LLM.",
     )
     _add_config_argument(generate_cases)
+    ensure_builtin_attacks_registered()
+    generate_cases_attack_choices = ("auto", *default_attack_registry().ids())
     generate_cases.add_argument(
         "--attack",
-        choices=("auto", "poisonedrag", "hijackrag"),
+        choices=generate_cases_attack_choices,
         default="auto",
-        help="Which attack block to use from the YAML (default: auto — single attack block).",
+        metavar="NAME",
+        help=(
+            "Registered attack id or auto (single attack block in YAML). "
+            f"Built-in ids: {', '.join(default_attack_registry().ids())}."
+        ),
     )
     generate_cases.add_argument(
         "--output",
@@ -194,7 +173,8 @@ def _run_generate_cases(args: argparse.Namespace) -> int:
     _configure_logging(quiet=args.quiet, debug=args.debug)
     LOGGER.info("Loading generation config: %s", args.config)
     config = _load_config(args.config)
-    explicit = None if args.attack == "auto" else args.attack
+    explicit = None if args.attack == "auto" else str(args.attack).strip().lower()
+
     attack_kind = resolve_generate_cases_attack(config, explicit=explicit)
     output_path = args.output.expanduser()
     if not output_path.is_absolute():
@@ -203,51 +183,33 @@ def _run_generate_cases(args: argparse.Namespace) -> int:
         raise CLIConfigError(
             f"output file already exists: {output_path}. Use --overwrite to replace it."
         )
-    if attack_kind == "poisonedrag":
-        LOGGER.info("Building PoisonedRAG automatic case generator")
-        generator = build_poisonedrag_case_generator(config)
-        LOGGER.info(
-            "Generating %d PoisonedRAG case(s) [target_style=%s]",
-            args.count,
-            args.target_style,
-        )
-        cases = generator.generate_cases(
-            count=args.count,
-            topic=args.topic,
-            target_style=args.target_style,
-            seed=args.seed,
-        )
-        payload = {"cases": [_poisonedrag_case_mapping(case) for case in cases]}
-        yaml_attack = "poisonedrag"
-    else:
-        LOGGER.info("Building HijackRAG automatic case generator")
-        generator = build_hijackrag_case_generator(config)
-        adv = int(args.adv_per_query)
-        if adv < 1:
-            raise CLIConfigError("--adv-per-query must be at least 1")
-        LOGGER.info(
-            "Generating %d HijackRAG case(s) [target_style=%s, adv_per_query=%d]",
-            args.count,
-            args.target_style,
-            adv,
-        )
-        cases = generator.generate_cases(
-            count=args.count,
-            topic=args.topic,
-            target_style=args.target_style,
-            adv_per_query=adv,
-            seed=args.seed,
-        )
-        payload = {"cases": [_hijackrag_case_mapping(case) for case in cases]}
-        yaml_attack = "hijackrag"
+
+    registry = default_attack_registry()
+    plugin = registry.get(attack_kind)
+    adv = max(1, int(args.adv_per_query))
+    params = GenerateCasesParams(
+        count=int(args.count),
+        topic=args.topic,
+        target_style=str(args.target_style),
+        seed=args.seed,
+        adv_per_query=adv,
+    )
+    LOGGER.info(
+        "Generating %d case(s) via %s [target_style=%s]",
+        params.count,
+        plugin.display_name,
+        params.target_style,
+    )
+    cases = plugin.generate_cases(config, params)
+    payload = {"cases": [plugin.serialize_case_for_yaml(case) for case in cases]}
+    yaml_attack = plugin.attack_id
 
     _write_yaml(output_path, payload)
     if args.quiet:
         print(output_path)
         return 0
 
-    label = "PoisonedRAG" if yaml_attack == "poisonedrag" else "HijackRAG"
-    print(f"Generated {label} cases")
+    print(f"Generated {plugin.display_name} cases")
     print(f"Output: {output_path}")
     print(f"Cases: {len(cases)}")
     if args.topic:
@@ -344,48 +306,6 @@ def _write_yaml(path: Path, content: Mapping[str, Any]) -> None:
         path.write_text(text, encoding="utf-8")
     except OSError as exc:
         raise CLIConfigError(f"could not write YAML output file: {path}") from exc
-
-
-def _poisonedrag_case_mapping(request: Any) -> Mapping[str, str]:
-    case_id = str(getattr(request, "case_id", "") or "").strip()
-    query = str(getattr(request, "query", "")).strip()
-    correct_answer = str(getattr(request, "correct_answer", "") or "").strip()
-    target_incorrect_answer = str(
-        getattr(request, "target_incorrect_answer", "") or ""
-    ).strip()
-    if not query or not correct_answer or not target_incorrect_answer:
-        raise CLIConfigError("generated case is missing required fields")
-    if not case_id:
-        case_id = f"generated_case_{abs(hash(query)) % 1_000_000}"
-    return {
-        "id": case_id,
-        "query": query,
-        "correct_answer": correct_answer,
-        "target_incorrect_answer": target_incorrect_answer,
-    }
-
-
-def _hijackrag_case_mapping(request: Any) -> Mapping[str, Any]:
-    case_id = str(getattr(request, "case_id", "") or "").strip()
-    query = str(getattr(request, "query", "") or "").strip()
-    correct_answer = str(getattr(request, "correct_answer", "") or "").strip()
-    hijack_insert = str(getattr(request, "hijack_insert", "") or "").strip()
-    adv_per_query = int(getattr(request, "adv_per_query", 1) or 1)
-    if not query or not correct_answer or not hijack_insert:
-        raise CLIConfigError("generated HijackRAG case is missing required fields")
-    if not case_id:
-        case_id = f"generated_case_{abs(hash(query)) % 1_000_000}"
-    row: dict[str, Any] = {
-        "id": case_id,
-        "query": query,
-        "correct_answer": correct_answer,
-        "hijack_insert": hijack_insert,
-        "adv_per_query": adv_per_query,
-    }
-    seed = getattr(request, "seed", None)
-    if seed is not None:
-        row["seed"] = int(seed)
-    return row
 
 
 def _print_report(

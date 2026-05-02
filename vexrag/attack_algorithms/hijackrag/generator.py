@@ -2,7 +2,6 @@ import random
 from collections.abc import Iterable, Sequence
 from pathlib import Path
 from time import perf_counter
-from typing import Any, Protocol
 
 from vexrag.attack_algorithms.hijackrag.schema import (
     HijackRAGMeta,
@@ -14,34 +13,9 @@ from vexrag.attack_algorithms.hijackrag.segments import (
     apply_hijack_insert,
     load_hijack_segments,
 )
-from vexrag.attack_algorithms.poisonedrag.prompts import build_correct_answer_prompt
-from vexrag.attack_algorithms.poisonedrag.schema import TargetStyle
-from vexrag.attack_algorithms.poisonedrag.validators import (
-    validate_correct_answer_payload,
-)
-
-
-class LLMClientProtocol(Protocol):
-    model_id: str
-
-    def complete_json(
-        self,
-        prompt: str,
-        *,
-        schema_name: str | None = None,
-        seed: int | None = None,
-    ) -> str | dict[str, Any]: ...
-
-
-class CorrectAnswerProviderProtocol(Protocol):
-    def get_correct_answer(
-        self,
-        query: str,
-        *,
-        target_style: TargetStyle,
-        seed: int | None = None,
-    ) -> str: ...
-
+from vexrag.core.contracts import CorrectAnswerProviderProtocol, LLMClientProtocol
+from vexrag.core.correct_answer_prompt import build_correct_answer_prompt
+from vexrag.core.llm_response_validation import validate_correct_answer_payload
 
 PROMPT_VERSION = "hijackrag-segments-v1"
 
@@ -121,7 +95,7 @@ class HijackRAGGenerator:
         if self.correct_answer_provider is not None:
             candidate = self.correct_answer_provider.get_correct_answer(
                 request.query,
-                target_style=request.target_style,
+                target_style=request.correct_answer_style,
                 seed=request.seed,
             )
             text = candidate.strip()
@@ -134,12 +108,55 @@ class HijackRAGGenerator:
         payload = self.llm_client.complete_json(
             build_correct_answer_prompt(
                 query=request.query,
-                target_style=request.target_style,
+                target_style=request.correct_answer_style,
             ),
-            schema_name="hijackrag.correct_answer",
-            seed=request.seed,
         )
         return validate_correct_answer_payload(payload), "llm_generated"
+
+    @staticmethod
+    def _clean_unique_segment_ids(raw_ids: Iterable[str]) -> list[str]:
+        cleaned = (sid for sid in (str(raw_id).strip() for raw_id in raw_ids) if sid)
+        return list(dict.fromkeys(cleaned))
+
+    def _segments_from_explicit_ids(
+        self,
+        segment_ids: Iterable[str],
+        limit: int,
+        warnings: list[str],
+    ) -> list[HijackSegmentRecord]:
+        chosen: list[HijackSegmentRecord] = []
+        for sid in self._clean_unique_segment_ids(segment_ids):
+            rec = self._by_id.get(sid)
+            if rec is None:
+                warnings.append(f"Unknown hijack segment id ignored: {sid}")
+                continue
+            chosen.append(rec)
+            if len(chosen) >= limit:
+                break
+        return chosen
+
+    def _extend_segments_with_random_fill(
+        self,
+        chosen: list[HijackSegmentRecord],
+        target_count: int,
+        rng: random.Random,
+        warnings: list[str],
+    ) -> None:
+        seen = {r.segment_id for r in chosen}
+        pool = [r for r in self._segments if r.segment_id not in seen]
+        rng.shuffle(pool)
+        pool_index = 0
+        while len(chosen) < target_count:
+            if not pool:
+                pool = list(self._segments)
+                rng.shuffle(pool)
+                pool_index = 0
+                if len(self._segments) < target_count:
+                    warnings.append(
+                        "Fewer unique HijackRAG segments than adv_per_query; reusing templates."
+                    )
+            chosen.append(pool[pool_index % len(pool)])
+            pool_index += 1
 
     def _pick_segments(
         self,
@@ -147,42 +164,14 @@ class HijackRAGGenerator:
         warnings: list[str],
     ) -> tuple[list[HijackSegmentRecord], tuple[str, ...]]:
         n = max(1, request.adv_per_query)
-        chosen: list[HijackSegmentRecord] = []
-        seen: set[str] = set()
-
-        for raw_id in request.segment_ids:
-            sid = str(raw_id).strip()
-            if not sid:
-                continue
-            rec = self._by_id.get(sid)
-            if rec is None:
-                warnings.append(f"Unknown hijack segment id ignored: {sid}")
-                continue
-            if sid in seen:
-                continue
-            chosen.append(rec)
-            seen.add(sid)
-            if len(chosen) >= n:
-                return chosen, tuple(r.segment_id for r in chosen)
+        chosen = self._segments_from_explicit_ids(request.segment_ids, n, warnings)
+        if len(chosen) >= n:
+            return chosen, tuple(r.segment_id for r in chosen)
 
         rng = (
             random.Random(request.seed) if request.seed is not None else random.Random()
         )
-        pool = [r for r in self._segments if r.segment_id not in seen]
-        rng.shuffle(pool)
-        pool_index = 0
-        while len(chosen) < n:
-            if not pool:
-                pool = list(self._segments)
-                rng.shuffle(pool)
-                pool_index = 0
-                if len(self._segments) < n:
-                    warnings.append(
-                        "Fewer unique HijackRAG segments than adv_per_query; reusing templates."
-                    )
-            chosen.append(pool[pool_index % len(pool)])
-            pool_index += 1
-
+        self._extend_segments_with_random_fill(chosen, n, rng, warnings)
         return chosen, tuple(r.segment_id for r in chosen)
 
     def _build_adv_texts(

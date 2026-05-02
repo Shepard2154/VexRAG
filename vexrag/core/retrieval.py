@@ -1,5 +1,4 @@
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
 from enum import StrEnum
 from hashlib import sha256
 from pathlib import Path
@@ -35,12 +34,14 @@ class CorpusPoisoningAdapterProtocol(Protocol):
     def delete_texts(self, document_ids: Sequence[str]) -> None: ...
 
 
-@dataclass(frozen=True, slots=True)
 class FileTextCorpusPoisoningAdapter:
     """Writes poisoned texts as standalone files in a file_text corpus."""
 
-    path: Path
-    filename_prefix: str = "poisonedrag"
+    __slots__ = ("path", "filename_prefix")
+
+    def __init__(self, path: Path, filename_prefix: str) -> None:
+        self.path = path
+        self.filename_prefix = filename_prefix
 
     def add_texts(
         self,

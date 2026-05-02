@@ -1,7 +1,6 @@
 import json
 from collections.abc import Iterable
 from time import perf_counter
-from typing import Any, Protocol
 
 from vexrag.attack_algorithms.poisonedrag.prompts import (
     PROMPT_VERSION,
@@ -12,7 +11,6 @@ from vexrag.attack_algorithms.poisonedrag.schema import (
     PoisonedRAGMeta,
     PoisonedRAGRequest,
     PoisonedRAGResult,
-    TargetStyle,
 )
 from vexrag.attack_algorithms.poisonedrag.validators import (
     PoisonedRAGValidationError,
@@ -20,28 +18,7 @@ from vexrag.attack_algorithms.poisonedrag.validators import (
     validate_correct_answer_payload,
     validate_poison_payload,
 )
-
-
-class LLMClientProtocol(Protocol):
-    model_id: str
-
-    def complete_json(
-        self,
-        prompt: str,
-        *,
-        schema_name: str | None = None,
-        seed: int | None = None,
-    ) -> str | dict[str, Any]: ...
-
-
-class CorrectAnswerProviderProtocol(Protocol):
-    def get_correct_answer(
-        self,
-        query: str,
-        *,
-        target_style: TargetStyle,
-        seed: int | None = None,
-    ) -> str: ...
+from vexrag.core.contracts import CorrectAnswerProviderProtocol, LLMClientProtocol
 
 
 class PoisonedRAGGenerator:
@@ -113,11 +90,7 @@ class PoisonedRAGGenerator:
             query=request.query,
             target_style=request.target_style,
         )
-        correct_answer_payload = self.llm_client.complete_json(
-            correct_answer_prompt,
-            schema_name="poisonedrag.stage1.correct_answer",
-            seed=request.seed,
-        )
+        correct_answer_payload = self.llm_client.complete_json(correct_answer_prompt)
         correct_answer = validate_correct_answer_payload(correct_answer_payload)
         return correct_answer, "llm_generated"
 
@@ -135,9 +108,7 @@ class PoisonedRAGGenerator:
             target_style=request.target_style,
         )
         poison_candidates_payload = self.llm_client.complete_json(
-            poison_candidates_prompt,
-            schema_name="poisonedrag.stage2.poison_candidates",
-            seed=request.seed,
+            poison_candidates_prompt
         )
         try:
             incorrect_answer, raw_adv_texts = validate_poison_payload(
@@ -228,15 +199,7 @@ def _build_soft_claim_hint(target_claim: str) -> str:
         for token in target_claim.split()
         if len(token.strip(".,:;!?()[]{}\"'")) >= 5
     ]
-    unique_keywords: list[str] = []
-    seen: set[str] = set()
-    for token in keywords:
-        if token in seen:
-            continue
-        seen.add(token)
-        unique_keywords.append(token)
-        if len(unique_keywords) >= 6:
-            break
+    unique_keywords = list(dict.fromkeys(keywords))[:6]
     if not unique_keywords:
         return "Some sources frame the answer in a more controversial way."
     joined = ", ".join(unique_keywords)

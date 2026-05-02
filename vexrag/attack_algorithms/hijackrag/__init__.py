@@ -24,16 +24,23 @@ from vexrag.attack_algorithms.hijackrag.segments import (
 )
 
 __all__ = [
-    "AutomaticHijackRAGCaseGenerator",
+    # Evaluation
     "HijackRAGJudgePromptBuilder",
+    # Case generation
+    "AutomaticHijackRAGCaseGenerator",
+    # Generator
     "HijackRAGGenerator",
+    # Scan
     "HijackRAGScanConfig",
     "HijackRAGScanRunner",
+    # Report
     "HijackRAGCaseResult",
     "HijackRAGScanReport",
+    # Schema
     "HijackRAGMeta",
     "HijackRAGRequest",
     "HijackRAGResult",
+    # Segments
     "HijackSegmentRecord",
     "apply_hijack_insert",
     "default_hijack_segments_path",

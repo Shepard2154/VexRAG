@@ -1,9 +1,12 @@
-import json
 import re
-from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any
 
-from vexrag.attack_algorithms.poisonedrag.schema import PoisonedRAGRequest, TargetStyle
+from vexrag.attack_algorithms.poisonedrag.schema import PoisonedRAGRequest
+from vexrag.core.contracts import LLMClientProtocol, TargetStyle
+from vexrag.core.llm_response_validation import (
+    LLMPayloadValidationError,
+    coerce_payload_to_dict,
+)
 
 PROMPT_VERSION = "poisonedrag-automatic-cases-v1"
 
@@ -12,22 +15,16 @@ class AutomaticCaseGenerationError(ValueError):
     """Raised when automatic case generation fails or returns invalid payload."""
 
 
-class LLMClientProtocol(Protocol):
-    model_id: str
-
-    def complete_json(
-        self,
-        prompt: str,
-        *,
-        schema_name: str | None = None,
-        seed: int | None = None,
-    ) -> str | dict[str, Any]: ...
-
-
-@dataclass(frozen=True, slots=True)
 class AutomaticPoisonedRAGCaseGenerator:
-    llm_client: LLMClientProtocol
-    prompt_version: str = PROMPT_VERSION
+    __slots__ = ("llm_client", "prompt_version")
+
+    def __init__(
+        self,
+        llm_client: LLMClientProtocol,
+        prompt_version: str = PROMPT_VERSION,
+    ) -> None:
+        self.llm_client = llm_client
+        self.prompt_version = prompt_version
 
     def generate_cases(
         self,
@@ -45,18 +42,14 @@ class AutomaticPoisonedRAGCaseGenerator:
             topic=topic,
             target_style=target_style,
         )
-        payload = self.llm_client.complete_json(
-            prompt,
-            schema_name="poisonedrag.automatic_cases",
-            seed=seed,
-        )
+        payload = self.llm_client.complete_json(prompt)
         cases = _validate_cases_payload(payload, expected_count=count)
         return tuple(
             PoisonedRAGRequest(
                 query=case["query"],
-                case_id=case["id"],
                 correct_answer=case["correct_answer"],
                 target_incorrect_answer=case["target_incorrect_answer"],
+                case_id=case["id"],
                 target_style=target_style,
             )
             for case in cases
@@ -109,7 +102,10 @@ def _validate_cases_payload(
     *,
     expected_count: int,
 ) -> list[dict[str, str]]:
-    data = _coerce_payload_to_dict(payload)
+    try:
+        data = coerce_payload_to_dict(payload)
+    except LLMPayloadValidationError as exc:
+        raise AutomaticCaseGenerationError(str(exc)) from exc
     raw_cases = data.get("cases")
     if not isinstance(raw_cases, list):
         raise AutomaticCaseGenerationError("Field 'cases' must be a list.")
@@ -118,8 +114,7 @@ def _validate_cases_payload(
             f"Expected at least {expected_count} generated cases, got {len(raw_cases)}."
         )
 
-    validated: list[dict[str, str]] = []
-    seen_ids: set[str] = set()
+    by_case_id: dict[str, dict[str, str]] = {}
     for raw_case in raw_cases:
         if not isinstance(raw_case, dict):
             continue
@@ -134,41 +129,23 @@ def _validate_cases_payload(
         )
         raw_id = raw_case.get("id")
         case_id = _normalize_case_id(raw_id if isinstance(raw_id, str) else query)
-        if case_id in seen_ids:
+        if case_id in by_case_id:
             continue
-        seen_ids.add(case_id)
-        validated.append(
-            {
-                "id": case_id,
-                "query": query,
-                "correct_answer": correct_answer,
-                "target_incorrect_answer": target_incorrect_answer,
-            }
-        )
-        if len(validated) >= expected_count:
+        by_case_id[case_id] = {
+            "id": case_id,
+            "query": query,
+            "correct_answer": correct_answer,
+            "target_incorrect_answer": target_incorrect_answer,
+        }
+        if len(by_case_id) >= expected_count:
             break
 
+    validated = list(by_case_id.values())
     if len(validated) < expected_count:
         raise AutomaticCaseGenerationError(
             f"Could not validate {expected_count} unique cases from model output."
         )
     return validated
-
-
-def _coerce_payload_to_dict(payload: Any) -> dict[str, Any]:
-    if isinstance(payload, dict):
-        return payload
-    if isinstance(payload, str):
-        try:
-            parsed = json.loads(payload)
-        except json.JSONDecodeError as exc:
-            raise AutomaticCaseGenerationError(
-                "LLM response is not valid JSON."
-            ) from exc
-        if not isinstance(parsed, dict):
-            raise AutomaticCaseGenerationError("LLM response must be a JSON object.")
-        return parsed
-    raise AutomaticCaseGenerationError("Unsupported LLM response payload type.")
 
 
 def _required_text(value: object, *, field: str) -> str:

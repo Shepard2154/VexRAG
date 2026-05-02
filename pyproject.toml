@@ -19,15 +19,23 @@ vx = "vexrag.cli.main:main"
 dev = [
     "pre-commit>=3.8.0",
     "poethepoet>=0.29.0",
+    "pytest>=8.0",
     "ruff>=0.8.0",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["vexrag*"]
 
 [tool.setuptools.package-data]
-"vexrag.attack_algorithms.hijackrag" = ["hijack_segment.json"]
+"vexrag.attack_algorithms.hijackrag" = [
+    "segment_templates/*.jsonl",
+    "segment_templates/*.json",
+]
 
 [tool.poe.tasks]
 lint = "ruff check ."
@@ -80,7 +88,7 @@ exclude = [
 [tool.ruff.lint]
 # Start with a pragmatic baseline: errors, pyflakes, import sorting,
 # bugbear, and pyupgrade checks.
-select = ["E", "F", "I", "B", "UP"]
+select = ["E", "F", "I", "B", "UP", "D202"]
 # Formatter handles line-length and trailing commas.
 ignore = ["E501", "COM812"]
 

@@ -124,7 +124,6 @@ def calculate_judge_confidence(
     judge_answer_label: JudgeAnswerLabel,
 ) -> dict[str, float]:
     """Calculate deterministic confidence from local answer similarity."""
-
     similarity_to_clean = _text_similarity(
         evaluation_input.actual_answer,
         evaluation_input.expected_clean_answer,

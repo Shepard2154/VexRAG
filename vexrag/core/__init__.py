@@ -1,3 +1,5 @@
+from vexrag.core.contracts import ScanVerdict, TargetStyle
+from vexrag.core.correct_answer_prompt import build_correct_answer_prompt
 from vexrag.core.evaluation import (
     CosineSimilarityMetric,
     EmbeddingClientProtocol,
@@ -12,6 +14,11 @@ from vexrag.core.evaluation import (
     SemanticSimilarityEvaluator,
     SimilarityMetricProtocol,
     validate_judge_response,
+)
+from vexrag.core.llm_response_validation import (
+    LLMPayloadValidationError,
+    coerce_payload_to_dict,
+    validate_correct_answer_payload,
 )
 from vexrag.core.providers import (
     OllamaEmbeddingClient,
@@ -29,7 +36,6 @@ from vexrag.core.retrieval import (
     FileTextCorpusPoisoningAdapter,
     RetrievalBackend,
 )
-from vexrag.core.scan import ScanVerdict
 from vexrag.core.target import (
     HTTPResponsePaths,
     HTTPTargetSystemAdapter,
@@ -41,6 +47,13 @@ from vexrag.core.target import (
 )
 
 __all__ = [
+    # Shared attack typing
+    "TargetStyle",
+    # LLM JSON helpers
+    "LLMPayloadValidationError",
+    "build_correct_answer_prompt",
+    "coerce_payload_to_dict",
+    "validate_correct_answer_payload",
     # Evaluation types
     "EvaluationInput",
     "EvaluationResult",
