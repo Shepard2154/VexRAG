@@ -2,8 +2,10 @@
 
 Operational setup for a large StackOverflow-based RAG index using:
 - XML dump (`Posts.xml`)
-- TSV/CSV intermediate export
+- CSV intermediate export
 - Qdrant vector storage
+
+The full XML → CSV → Qdrant pipeline has **not** been exercised end-to-end in this repository. Errors may occur.
 
 ## What This Example Provides
 
@@ -13,7 +15,7 @@ Operational setup for a large StackOverflow-based RAG index using:
 
 ## Prerequisites
 
-- Python 3.10+
+- Python 3.11+
 - Running Qdrant
 - Enough disk for intermediate CSV and enough RAM/VRAM for embedding batches
 

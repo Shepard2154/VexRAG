@@ -12,3 +12,4 @@ dist/
 Dockerfile
 .dockerignore
 contexts/poisonedrag_*.txt
+contexts/hijackrag_*.txt

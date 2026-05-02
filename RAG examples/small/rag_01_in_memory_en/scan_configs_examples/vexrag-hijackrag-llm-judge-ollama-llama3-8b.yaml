@@ -15,7 +15,7 @@ attack:
     adv_per_query: 1
     seed: 1
     case_files:
-      - ./cases/hijackrag-cases-curated.yaml
+      - ./cases/hijackrag-cases.yaml
     llm_client:
       provider: ollama
       base_url: http://localhost:11434
