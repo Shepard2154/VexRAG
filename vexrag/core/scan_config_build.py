@@ -1,5 +1,3 @@
-"""YAML-oriented helpers and builders shared by CLI/web scan assembly."""
-
 import json
 from collections.abc import Mapping, Sequence
 from pathlib import Path

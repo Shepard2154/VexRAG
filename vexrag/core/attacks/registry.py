@@ -10,7 +10,6 @@ class AttackRegistryError(ScanConfigError):
 
 class AttackRegistry:
     """Registers built-in or third-party attack plugins by YAML ``attack.<id>`` key."""
-
     __slots__ = ("_by_id",)
 
     def __init__(self) -> None:

@@ -8,7 +8,6 @@ from vexrag.core.target import TargetSystemResponse
 @dataclass(frozen=True, slots=True)
 class HijackRAGCaseResult:
     """Single HijackRAG target-system check."""
-
     query: str
     adversarial_texts: tuple[str, ...]
     expected_incorrect_answer: str
@@ -29,7 +28,6 @@ class HijackRAGCaseResult:
 @dataclass(frozen=True, slots=True)
 class HijackRAGScanReport:
     """Machine-readable report for a HijackRAG scan."""
-
     verdict: ScanVerdict
     cases: tuple[HijackRAGCaseResult, ...]
     generated_adversarial_texts: tuple[str, ...]

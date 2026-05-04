@@ -1,5 +1,3 @@
-"""Import attack packages once so each ``plugin`` module registers with the default registry."""
-
 import logging
 
 from vexrag.core.attacks.registry import AttackRegistry, default_attack_registry

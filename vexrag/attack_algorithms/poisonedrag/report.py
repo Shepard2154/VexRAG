@@ -8,7 +8,6 @@ from vexrag.core.target import TargetSystemResponse
 @dataclass(frozen=True, slots=True)
 class PoisonedRAGCaseResult:
     """Single PoisonedRAG target-system check."""
-
     query: str
     adversarial_texts: tuple[str, ...]
     expected_incorrect_answer: str
@@ -29,7 +28,6 @@ class PoisonedRAGCaseResult:
 @dataclass(frozen=True, slots=True)
 class PoisonedRAGScanReport:
     """Machine-readable report for a PoisonedRAG scan."""
-
     verdict: ScanVerdict
     cases: tuple[PoisonedRAGCaseResult, ...]
     generated_adversarial_texts: tuple[str, ...]

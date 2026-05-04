@@ -7,7 +7,6 @@ from typing import Any, Protocol
 
 class RetrievalBackend(StrEnum):
     """backend used to hold retrieved context."""
-
     QDRANT = "qdrant"
     FAISS = "faiss"
     CHROMA = "chroma"
@@ -24,7 +23,6 @@ class CorpusPoisoningError(RuntimeError):
 
 class CorpusPoisoningAdapterProtocol(Protocol):
     """Adapter contract for writing poisoned texts into retrieval storage."""
-
     def add_texts(
         self,
         texts: Sequence[str],
@@ -36,7 +34,6 @@ class CorpusPoisoningAdapterProtocol(Protocol):
 
 class FileTextCorpusPoisoningAdapter:
     """Writes poisoned texts as standalone files in a file_text corpus."""
-
     __slots__ = ("path", "filename_prefix")
 
     def __init__(self, path: Path, filename_prefix: str) -> None:

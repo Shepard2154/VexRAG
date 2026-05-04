@@ -1,5 +1,3 @@
-"""Thin CLI wiring: resolves YAML attacks via ``AttackRegistry`` and delegates assembly."""
-
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -27,10 +25,13 @@ def build_scan_command(
     config: Mapping[str, Any],
     *,
     base_dir: Path | None = None,
+    attack: str | None = None,
 ) -> ScanCommandProtocol:
     ensure_builtin_attacks_registered()
     registry = default_attack_registry()
-    attack_id = registry.resolve_yaml_attack_key(config)
+    attack_id = (
+        attack if attack is not None else registry.resolve_yaml_attack_key(config)
+    )
     return registry.get(attack_id).build_scan_command(config, base_dir)
 
 
@@ -48,28 +49,6 @@ def resolve_generate_cases_attack(
     return default_attack_registry().resolve_generate_cases_attack(
         config,
         explicit=explicit,
-    )
-
-
-def build_poisonedrag_scan_command(
-    config: Mapping[str, Any],
-    base_dir: Path | None = None,
-) -> ScanCommandProtocol:
-    ensure_builtin_attacks_registered()
-    return (
-        default_attack_registry()
-        .get("poisonedrag")
-        .build_scan_command(config, base_dir)
-    )
-
-
-def build_hijackrag_scan_command(
-    config: Mapping[str, Any],
-    base_dir: Path | None = None,
-) -> ScanCommandProtocol:
-    ensure_builtin_attacks_registered()
-    return (
-        default_attack_registry().get("hijackrag").build_scan_command(config, base_dir)
     )
 
 
@@ -95,8 +74,6 @@ __all__ = [
     "ScanCommand",
     "build_corpus_poisoner",
     "build_evaluation_strategy",
-    "build_hijackrag_scan_command",
-    "build_poisonedrag_scan_command",
     "build_scan_command",
     "build_target_system",
     "resolve_attack_method",

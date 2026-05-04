@@ -9,7 +9,6 @@ PoisoningStyle = Literal["original", "aggressive", "soft"]
 @dataclass(slots=True)
 class PoisonedRAGRequest:
     """Input contract for generating PoisonedRAG candidates."""
-
     query: str
     correct_answer: str | None = None
     target_incorrect_answer: str | None = None
@@ -23,7 +22,6 @@ class PoisonedRAGRequest:
 @dataclass(slots=True)
 class PoisonedRAGSample:
     """Single generated adversarial candidate."""
-
     text: str
     source_corpus: str | None = None
 
@@ -31,7 +29,6 @@ class PoisonedRAGSample:
 @dataclass(slots=True)
 class PoisonedRAGMeta:
     """Generation metadata for diagnostics and observability."""
-
     latency_ms: int
     prompt_version: str
     model_id: str
@@ -42,7 +39,6 @@ class PoisonedRAGMeta:
 @dataclass(slots=True)
 class PoisonedRAGResult(PoisonedResult):
     """Output contract returned by PoisonedRAG generation API."""
-
     query: str
     correct_answer: str
     incorrect_answer: str

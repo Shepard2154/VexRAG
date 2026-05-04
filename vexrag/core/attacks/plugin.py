@@ -10,7 +10,6 @@ from vexrag.core.evaluation import JudgePromptBuilderProtocol
 @dataclass(frozen=True, slots=True)
 class GenerateCasesParams:
     """Arguments shared by ``vx generate-cases`` across attacks."""
-
     count: int
     topic: str | None
     target_style: str
@@ -21,7 +20,6 @@ class GenerateCasesParams:
 @dataclass(frozen=True, slots=True)
 class AttackPlugin:
     """One attack implementation registered under ``attack.<attack_id>`` in YAML."""
-
     attack_id: str
     display_name: str
     build_scan_command: Callable[[Mapping[str, Any], Path | None], ScanCommandProtocol]

@@ -1,5 +1,3 @@
-"""PoisonedRAG registration and YAML assembly (invoked by CLI/web via ``AttackRegistry``)."""
-
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any

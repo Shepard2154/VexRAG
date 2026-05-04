@@ -24,7 +24,6 @@ LOGGER = logging.getLogger("vexrag.scan.poisonedrag")
 @dataclass(frozen=True, slots=True)
 class PoisonedRAGScanConfig:
     """Execution settings for a PoisonedRAG target-system scan."""
-
     repetitions: int = 1
     attack_success_rate_threshold: float = 0.0
     override_contexts: bool = False
@@ -39,7 +38,6 @@ class PoisonedRAGScanConfig:
 
 class PoisonedRAGScanRunner:
     """Orchestrates PoisonedRAG generation and target-system checks."""
-
     def __init__(
         self,
         generator: PoisonedRAGGenerator,

@@ -10,7 +10,6 @@ from urllib.request import Request, urlopen
 @dataclass(frozen=True, slots=True)
 class TargetSystemQuery:
     """Transport-neutral query sent to a target RAG system."""
-
     query: str
     contexts: tuple[str, ...] = ()
     metadata: Mapping[str, Any] = field(default_factory=dict)
@@ -19,7 +18,6 @@ class TargetSystemQuery:
 @dataclass(frozen=True, slots=True)
 class TargetSystemResponse:
     """Transport-neutral response returned by a target RAG system."""
-
     answer: str
     contexts: tuple[str, ...] = ()
     metadata: Mapping[str, Any] = field(default_factory=dict)
@@ -27,7 +25,6 @@ class TargetSystemResponse:
 
 class TargetSystemAdapterProtocol(Protocol):
     """Adapter contract for invoking a target RAG system."""
-
     def answer(self, request: TargetSystemQuery) -> TargetSystemResponse: ...
 
 
@@ -41,7 +38,6 @@ class HTTPTargetSystemAdapterError(RuntimeError):
 @dataclass(frozen=True, slots=True)
 class HTTPResponsePaths:
     """JSON paths used to map a target-system response into core contracts."""
-
     answer: str = "answer"
     contexts: str | None = "contexts"
 
@@ -49,7 +45,6 @@ class HTTPResponsePaths:
 @dataclass(frozen=True, slots=True)
 class HTTPTargetSystemAdapterConfig:
     """Configuration for invoking a JSON-over-HTTP target RAG system."""
-
     base_url: str
     route: str = ""
     method: HTTPMethod | str = "POST"
@@ -93,7 +88,6 @@ class HTTPTargetSystemAdapterConfig:
 
 class HTTPTargetSystemAdapter:
     """Configurable HTTP implementation of TargetSystemAdapterProtocol."""
-
     def __init__(
         self,
         config: HTTPTargetSystemAdapterConfig,

@@ -11,7 +11,6 @@ from vexrag.core.evaluation.protocols import (
 
 class CosineSimilarityMetric:
     """Cosine similarity over numeric embedding vectors."""
-
     def score(self, left: Sequence[float], right: Sequence[float]) -> float:
         left_vector = tuple(left)
         right_vector = tuple(right)
@@ -33,7 +32,6 @@ class CosineSimilarityMetric:
 
 class SemanticSimilarityEvaluator:
     """Evaluates attack success by comparing answer embedding similarities."""
-
     strategy = "semantic_similarity"
 
     def __init__(

@@ -41,13 +41,11 @@ class ScanReportProtocol(Protocol):
 
 class ScanCommandProtocol(Protocol):
     """Runnable scan assembled from config (CLI, web, or programmatic)."""
-
     def run(self) -> ScanReportProtocol: ...
 
 
 class ConfiguredScanCommand:
     """Wires a runner with requests and scan config."""
-
     __slots__ = ("runner", "requests", "scan_config")
 
     def __init__(self, runner: Any, requests: Any, scan_config: Any) -> None:
