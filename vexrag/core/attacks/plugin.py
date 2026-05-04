@@ -19,7 +19,7 @@ class GenerateCasesParams:
 
 @dataclass(frozen=True, slots=True)
 class AttackPlugin:
-    """One attack implementation registered under ``attack.<attack_id>`` in YAML."""
+    """One attack implementation referenced by ``attacks[].id`` in scan YAML."""
     attack_id: str
     display_name: str
     build_scan_command: Callable[[Mapping[str, Any], Path | None], ScanCommandProtocol]

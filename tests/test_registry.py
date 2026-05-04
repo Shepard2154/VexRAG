@@ -33,25 +33,8 @@ def test_registry_duplicate_registration_raises() -> None:
         reg.register(p)
 
 
-def test_registry_resolve_yaml_requires_exactly_one_attack_block() -> None:
-    reg = AttackRegistry()
-    reg.register(_stub_plugin("alpha"))
-    reg.register(_stub_plugin("beta"))
-
-    with pytest.raises(AttackRegistryError, match="exactly one"):
-        reg.resolve_yaml_attack_key({"attack": {}})
-
-    with pytest.raises(AttackRegistryError, match="exactly one"):
-        reg.resolve_yaml_attack_key(
-            {"attack": {"alpha": {"x": 1}, "beta": {"y": 2}}},
-        )
-
-    key = reg.resolve_yaml_attack_key({"attack": {"alpha": {}}})
-    assert key == "alpha"
-
-
-def test_registry_unknown_yaml_attack_key() -> None:
+def test_registry_unknown_get_raises() -> None:
     reg = AttackRegistry()
     reg.register(_stub_plugin("alpha"))
     with pytest.raises(AttackRegistryError, match="unknown attack"):
-        reg.resolve_yaml_attack_key({"attack": {"legacy_attack": {}}})
+        reg.get("missing")

@@ -3,6 +3,7 @@ from vexrag.cli.scan_builder import (
     ScanCommand,
     build_evaluation_strategy,
     build_scan_command,
+    materialize_generate_cases_config,
     resolve_attack_method,
     resolve_generate_cases_attack,
 )
@@ -13,6 +14,7 @@ __all__ = [
     "ScanCommand",
     "build_evaluation_strategy",
     "build_scan_command",
+    "materialize_generate_cases_config",
     "resolve_attack_method",
     "resolve_generate_cases_attack",
 ]

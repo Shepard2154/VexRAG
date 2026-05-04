@@ -12,6 +12,7 @@ from vexrag.core.evaluation import (
     LLMJudgeEvaluator,
     SemanticSimilarityEvaluator,
 )
+from vexrag.core.evaluation.multi import MultiEvaluator
 from vexrag.core.providers import (
     build_embedding_client as build_provider_embedding_client,
 )
@@ -120,13 +121,12 @@ def build_corpus_poisoner(
     )
 
 
-def build_evaluation_strategy(
-    config: Mapping[str, Any],
+def _build_one_evaluator(
+    evaluation_config: Mapping[str, Any],
     *,
     attack_id: str,
     registry: AttackRegistry,
 ) -> EvaluationStrategyProtocol:
-    evaluation_config = _evaluation_section(config)
     strategy = str(evaluation_config.get("strategy", "semantic_similarity")).strip()
     if strategy == "semantic_similarity":
         return _build_semantic_similarity(evaluation_config)
@@ -136,6 +136,55 @@ def build_evaluation_strategy(
         )
     raise EvaluationConfigError(
         "evaluation.strategy must be one of: semantic_similarity, llm_judge"
+    )
+
+
+def build_evaluation_strategy(
+    config: Mapping[str, Any],
+    *,
+    attack_id: str,
+    registry: AttackRegistry,
+) -> EvaluationStrategyProtocol:
+    has_bundle = "evaluations" in config
+    has_single = "evaluation" in config
+    if has_bundle and has_single:
+        raise EvaluationConfigError(
+            "use either top-level evaluation or evaluations, not both"
+        )
+    if has_bundle:
+        bundle = config["evaluations"]
+        if not isinstance(bundle, Mapping):
+            raise EvaluationConfigError("evaluations must be a mapping")
+        combine_raw = str(bundle.get("combine", "any")).strip().lower()
+        if combine_raw not in ("any", "all"):
+            raise EvaluationConfigError("evaluations.combine must be 'any' or 'all'")
+        raw_list = bundle.get("evaluators")
+        if not isinstance(raw_list, list) or not raw_list:
+            raise EvaluationConfigError(
+                "evaluations.evaluators must be a non-empty list of evaluator configs"
+            )
+        built: list[EvaluationStrategyProtocol] = []
+        for index, item in enumerate(raw_list):
+            if not isinstance(item, Mapping):
+                raise EvaluationConfigError(
+                    f"evaluations.evaluators[{index}] must be a mapping"
+                )
+            built.append(
+                _build_one_evaluator(
+                    item,
+                    attack_id=attack_id,
+                    registry=registry,
+                )
+            )
+        return MultiEvaluator(tuple(built), combine=combine_raw)
+
+    if not has_single:
+        raise EvaluationConfigError("configure evaluation or evaluations")
+    evaluation_config = _evaluation_section(config)
+    return _build_one_evaluator(
+        evaluation_config,
+        attack_id=attack_id,
+        registry=registry,
     )
 
 

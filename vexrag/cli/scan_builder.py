@@ -2,14 +2,21 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from vexrag.core.attack_plan import (
+    materialize_config_for_attack_id,
+    materialize_step_config,
+    parse_attack_steps,
+)
 from vexrag.core.attacks import (
     default_attack_registry,
     ensure_builtin_attacks_registered,
 )
+from vexrag.core.attacks.chain_command import AttackChainScanCommand
 from vexrag.core.attacks.command import (
     ConfiguredScanCommand,
     ScanCommandProtocol,
 )
+from vexrag.core.config_errors import ScanConfigError
 from vexrag.core.scan_config_build import (
     build_corpus_poisoner,
     build_target_system,
@@ -29,15 +36,39 @@ def build_scan_command(
 ) -> ScanCommandProtocol:
     ensure_builtin_attacks_registered()
     registry = default_attack_registry()
-    attack_id = (
-        attack if attack is not None else registry.resolve_yaml_attack_key(config)
-    )
-    return registry.get(attack_id).build_scan_command(config, base_dir)
+    steps = parse_attack_steps(config, registry)
+    if attack is not None:
+        aid = str(attack).strip().lower()
+        registry.get(aid)
+        filtered = tuple(s for s in steps if s.attack_id == aid)
+        if not filtered:
+            raise ScanConfigError(f"no attack step with id {aid!r} in attacks list")
+        steps = filtered
+    if len(steps) == 1:
+        materialized = materialize_step_config(config, steps[0])
+        return registry.get(steps[0].attack_id).build_scan_command(
+            materialized,
+            base_dir,
+        )
+    built: list[tuple[str, ScanCommandProtocol]] = []
+    for step in steps:
+        materialized = materialize_step_config(config, step)
+        built.append(
+            (
+                step.attack_id,
+                registry.get(step.attack_id).build_scan_command(
+                    materialized,
+                    base_dir,
+                ),
+            )
+        )
+    return AttackChainScanCommand(tuple(built))
 
 
 def resolve_attack_method(config: Mapping[str, Any]) -> str:
     ensure_builtin_attacks_registered()
-    return default_attack_registry().resolve_yaml_attack_key(config)
+    steps = parse_attack_steps(config, default_attack_registry())
+    return ",".join(step.attack_id for step in steps)
 
 
 def resolve_generate_cases_attack(
@@ -46,10 +77,10 @@ def resolve_generate_cases_attack(
     explicit: str | None,
 ) -> str:
     ensure_builtin_attacks_registered()
-    return default_attack_registry().resolve_generate_cases_attack(
-        config,
-        explicit=explicit,
-    )
+    registry = default_attack_registry()
+    from vexrag.core.attack_plan import resolve_generate_cases_attack_id
+
+    return resolve_generate_cases_attack_id(config, registry, explicit=explicit)
 
 
 def build_evaluation_strategy(
@@ -59,14 +90,38 @@ def build_evaluation_strategy(
 ) -> Any:
     ensure_builtin_attacks_registered()
     registry = default_attack_registry()
-    attack_id = (
-        attack if attack is not None else registry.resolve_yaml_attack_key(config)
-    )
+    steps = parse_attack_steps(config, registry)
+    if attack is not None:
+        aid = str(attack).strip().lower()
+        registry.get(aid)
+        selected = tuple(s for s in steps if s.attack_id == aid)
+        if not selected:
+            raise ScanConfigError(f"no attack step with id {aid!r} in attacks list")
+        step = selected[0]
+    elif len(steps) == 1:
+        step = steps[0]
+    else:
+        raise ScanConfigError(
+            "pass attack='...' to build_evaluation_strategy when multiple attacks "
+            "are configured"
+        )
+    materialized = materialize_step_config(config, step)
     return assemble_evaluation_strategy(
-        config,
-        attack_id=attack_id,
+        materialized,
+        attack_id=step.attack_id,
         registry=registry,
     )
+
+
+def materialize_generate_cases_config(
+    config: Mapping[str, Any],
+    *,
+    attack_id: str,
+) -> dict[str, Any]:
+    """Return a single-attack config for ``generate_cases`` / plugin generators."""
+    ensure_builtin_attacks_registered()
+    registry = default_attack_registry()
+    return materialize_config_for_attack_id(config, attack_id, registry=registry)
 
 
 __all__ = [
@@ -76,6 +131,7 @@ __all__ = [
     "build_evaluation_strategy",
     "build_scan_command",
     "build_target_system",
+    "materialize_generate_cases_config",
     "resolve_attack_method",
     "resolve_generate_cases_attack",
 ]

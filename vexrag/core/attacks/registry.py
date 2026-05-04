@@ -1,4 +1,3 @@
-from collections.abc import Mapping
 from typing import Any
 
 from vexrag.core.config_errors import ScanConfigError
@@ -9,7 +8,7 @@ class AttackRegistryError(ScanConfigError):
 
 
 class AttackRegistry:
-    """Registers built-in or third-party attack plugins by YAML ``attack.<id>`` key."""
+    """Registers built-in or third-party attack plugins by YAML ``attacks[].id``."""
     __slots__ = ("_by_id",)
 
     def __init__(self) -> None:
@@ -37,49 +36,6 @@ class AttackRegistry:
 
     def ids(self) -> tuple[str, ...]:
         return tuple(sorted(self._by_id.keys()))
-
-    def resolve_yaml_attack_key(self, config: Mapping[str, Any]) -> str:
-        """Return the single configured ``attack.<id>`` key present in ``config``."""
-        attack = config.get("attack")
-        if not isinstance(attack, Mapping):
-            raise AttackRegistryError("attack must configure exactly one attack")
-
-        candidates = [
-            str(name).strip()
-            for name, value in attack.items()
-            if isinstance(value, Mapping) and isinstance(name, str) and name.strip()
-        ]
-        if len(candidates) != 1:
-            raise AttackRegistryError("attack must configure exactly one attack")
-
-        key = candidates[0]
-        if key not in self._by_id:
-            supported = ", ".join(sorted(self._by_id))
-            raise AttackRegistryError(
-                f"unknown attack {key!r} in YAML; supported attacks: {supported}"
-            )
-        return key
-
-    def resolve_generate_cases_attack(
-        self,
-        config: Mapping[str, Any],
-        *,
-        explicit: str | None,
-    ) -> str:
-        """Resolve attack id for ``generate-cases`` (explicit flag or single YAML block)."""
-        if explicit not in (None, "", "auto"):
-            name = str(explicit).strip().lower()
-            self.get(name)
-            attack = config.get("attack")
-            if not isinstance(attack, Mapping):
-                raise AttackRegistryError("attack must be configured in the scan YAML")
-            if name not in attack or not isinstance(attack[name], Mapping):
-                raise AttackRegistryError(
-                    f"attack.{name} must be configured in the scan YAML"
-                )
-            return name
-
-        return self.resolve_yaml_attack_key(config)
 
 
 _default_registry: AttackRegistry | None = None

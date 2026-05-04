@@ -9,7 +9,12 @@ from typing import Any
 from vexrag.cli.errors import CLIConfigError
 from vexrag.cli.scan_builder import (
     build_scan_command,
+    materialize_generate_cases_config,
     resolve_generate_cases_attack,
+)
+from vexrag.core.attacks.chain_command import (
+    AttackChainScanReport,
+    format_chain_step_summary_lines,
 )
 from vexrag.core.attacks import (
     GenerateCasesParams,
@@ -75,7 +80,7 @@ def _build_parser() -> argparse.ArgumentParser:
         default="auto",
         metavar="NAME",
         help=(
-            "Registered attack id or auto (single attack block in YAML). "
+            "Registered attack id or auto (only when the YAML has a single attacks step). "
             f"Built-in ids: {', '.join(default_attack_registry().ids())}."
         ),
     )
@@ -200,7 +205,11 @@ def _run_generate_cases(args: argparse.Namespace) -> int:
         plugin.display_name,
         params.target_style,
     )
-    cases = plugin.generate_cases(config, params)
+    gen_config = materialize_generate_cases_config(
+        config,
+        attack_id=attack_kind,
+    )
+    cases = plugin.generate_cases(gen_config, params)
     payload = {"cases": [plugin.serialize_case_for_yaml(case) for case in cases]}
     yaml_attack = plugin.attack_id
 
@@ -216,7 +225,9 @@ def _run_generate_cases(args: argparse.Namespace) -> int:
         print(f"Topic: {args.topic}")
     print()
     print("Use in config:")
-    print(f"  attack.{yaml_attack}.case_files: ['{output_path}']")
+    print(
+        f"  attacks: [ {{ id: {yaml_attack}, params: {{ case_files: ['{output_path}'] }} }} ]"
+    )
     return 0
 
 
@@ -238,14 +249,26 @@ def _log_config_summary(config: Mapping[str, Any]) -> None:
         method = target_http.get("method", "POST")
         LOGGER.info("Target: %s %s%s", method, base_url, route)
 
-    attack = config.get("attack")
-    if isinstance(attack, Mapping):
-        methods = [name for name, value in attack.items() if isinstance(value, Mapping)]
-        if methods:
-            LOGGER.info("Attack: %s", methods[0])
+    attacks = config.get("attacks")
+    if isinstance(attacks, list) and attacks:
+        ids: list[str] = []
+        for item in attacks:
+            if isinstance(item, Mapping):
+                raw_id = item.get("id")
+                if isinstance(raw_id, str) and raw_id.strip():
+                    ids.append(raw_id.strip())
+        if ids:
+            LOGGER.info("Attacks (%d): %s", len(ids), ", ".join(ids))
+
+    evaluations = config.get("evaluations")
+    if isinstance(evaluations, Mapping):
+        raw_list = evaluations.get("evaluators")
+        n = len(raw_list) if isinstance(raw_list, list) else 0
+        combine = evaluations.get("combine", "any")
+        LOGGER.info("Evaluations: %d evaluator(s), combine=%s", n, combine)
 
     evaluation = config.get("evaluation")
-    if isinstance(evaluation, Mapping):
+    if isinstance(evaluation, Mapping) and not isinstance(evaluations, Mapping):
         strategy = evaluation.get("strategy", "semantic_similarity")
         LOGGER.info("Evaluation: %s", strategy)
 
@@ -314,6 +337,11 @@ def _print_report(
     show_raw_responses: bool = False,
 ) -> None:
     print("VexRAG Scan")
+    if isinstance(report, AttackChainScanReport) and len(report.step_reports) > 1:
+        print("Per-step summary:")
+        for line in format_chain_step_summary_lines(report.step_reports):
+            print(line)
+        print()
     _print_report_summary(report, verdict_label="Verdict", asr_label="Success rate")
     print(f"Cases: {report.total_cases}")
     print()

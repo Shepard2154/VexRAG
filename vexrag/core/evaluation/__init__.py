@@ -13,6 +13,7 @@ from vexrag.core.evaluation.protocols import (
     JudgePromptBuilderProtocol,
     SimilarityMetricProtocol,
 )
+from vexrag.core.evaluation.multi import MultiEvaluator
 from vexrag.core.evaluation.semantic_similarity import (
     CosineSimilarityMetric,
     SemanticSimilarityEvaluator,
@@ -36,4 +37,6 @@ __all__ = [
     # Semantic similarity evaluation
     "CosineSimilarityMetric",
     "SemanticSimilarityEvaluator",
+    # Multi-evaluator
+    "MultiEvaluator",
 ]

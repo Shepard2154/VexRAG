@@ -10,18 +10,19 @@ target_system:
       answer: answer
       contexts: contexts
 
-attack:
-  hijackrag:
-    adv_per_query: 1
-    seed: 1
-    case_files:
-      - ./cases/hijackrag-cases.yaml
-    llm_client:
-      provider: ollama
-      base_url: http://localhost:11434
-      endpoint: /api/generate
-      model: llama3:8b
-      temperature: 0.0
+attacks:
+  - id: hijackrag
+    params:
+      adv_per_query: 1
+      seed: 1
+      case_files:
+        - ./cases/hijackrag-cases.yaml
+      llm_client:
+        provider: ollama
+        base_url: http://localhost:11434
+        endpoint: /api/generate
+        model: llama3:8b
+        temperature: 0.0
 
 evaluation:
   strategy: semantic_similarity
