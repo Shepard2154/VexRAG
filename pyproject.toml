@@ -4,13 +4,28 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vexrag"
-version = "0.1.0"
+version = "0.1.1"
 description = "Red Team testing for functional correctness of RAG systems under attack conditions."
 readme = "README.md"
 requires-python = ">=3.11"
+license = "MIT"
+keywords = ["rag", "security", "red-team", "llm", "evaluation"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = [
     "PyYAML",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Shepard2154/VexRAG"
+Repository = "https://github.com/Shepard2154/VexRAG"
 
 [project.scripts]
 vx = "vexrag.cli.main:main"

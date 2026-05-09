@@ -6,7 +6,48 @@ A toolkit for assessing the **functional correctness** of retrieval-augmented ge
 
 **Sample RAG stacks** for getting started: [RAG examples](RAG%20examples/README.md).
 
-## TODO
+## Quickstart
+
+### 1) Install
+
+```bash
+pip install vexrag
+```
+
+For vector DB-specific extras:
+
+```bash
+pip install "vexrag[qdrant]"
+pip install "vexrag[chroma]"
+pip install "vexrag[faiss]"
+```
+
+### 2) Verify installation
+
+```bash
+vx --help
+```
+
+### 3) Run a scan from config
+
+```bash
+vx scan --config path/to/scan.yml
+```
+
+Use sample configs from `RAG examples/` as a starting point.
+
+### 4) Quick end-to-end check with local example
+
+From `RAG examples/small/rag_01_in_memory_en`:
+
+```bash
+python small_rag.py
+vx scan --config scan_configs_examples/vexrag-chain-hijack-then-poisoned-semantic-ollama-nomic.yaml
+```
+
+The target API must be running on `http://localhost:8080` before `vx scan`.
+
+## Project roadmap
 
 Canonical checklist: [notes/TODO.md](notes/TODO.md).
 
