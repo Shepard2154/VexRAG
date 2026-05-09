@@ -20,7 +20,7 @@ def register_builtin_attacks(registry: AttackRegistry | None = None) -> AttackRe
     return reg
 
 
-def _load_attack_entry_points(registry: AttackRegistry) -> None:
+def load_attack_entry_points(registry: AttackRegistry) -> None:
     try:
         import importlib.metadata as im
     except ImportError:
@@ -52,13 +52,23 @@ _builtins_registered = False
 
 
 def ensure_builtin_attacks_registered() -> AttackRegistry:
-    """Idempotent registration for CLI/web entrypoints."""
+    """Idempotent registration for CLI and web entrypoints.
+
+    This function uses the process-wide default registry and module-level
+    idempotency; it is convenient for single entrypoints but can couple unrelated
+    callers in the same process.
+
+    For embedding (long-lived services, tests that need isolation), prefer
+    :func:`~vexrag.core.runtime.create_runtime` and
+    :meth:`VexRAGRuntime.ensure_builtin_attacks_registered` on that instance
+    instead.
+    """
     global _builtins_registered
     reg = default_attack_registry()
     if _builtins_registered:
         return reg
     register_builtin_attacks(reg)
-    _load_attack_entry_points(reg)
+    load_attack_entry_points(reg)
     _builtins_registered = True
     return reg
 

@@ -1,0 +1,12 @@
+---
+description: Minimum Python 3.11 — no backward-compat syntax shims for older versions
+globs: "**/*.py"
+alwaysApply: true
+---
+
+# Python 3.11 baseline
+
+The package requires **[Python 3.11](https://docs.python.org/3.11/)** or newer (`requires-python >= 3.11`).
+
+- Do not introduce constructs whose only purpose is compatibility with interpreters below 3.11.
+- Resolve forward references with string annotations (`"MyClass"`) or `typing.TYPE_CHECKING` imports when appropriate.

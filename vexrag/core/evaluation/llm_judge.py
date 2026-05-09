@@ -71,6 +71,7 @@ class LLMJudgeEvaluator:
                 "confidence_margin": confidence["confidence_margin"],
             },
             warnings=(),
+            evaluation_completed=True,
         )
 
     def _failed_result(
@@ -85,6 +86,7 @@ class LLMJudgeEvaluator:
             reason=warning,
             raw_response=raw_response,
             warnings=(warning,),
+            evaluation_completed=False,
         )
 
 

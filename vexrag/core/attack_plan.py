@@ -3,8 +3,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from vexrag.core.attacks.registry import AttackRegistry, AttackRegistryError
-from vexrag.core.config_errors import ScanConfigError
-from vexrag.core.config_merge import deep_merge_mappings
+from vexrag.core.config import ScanConfigError, deep_merge_mappings
 
 _STEP_KEYS = frozenset({"id", "params", "scan", "evaluation", "evaluations"})
 

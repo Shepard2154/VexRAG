@@ -15,7 +15,7 @@ from vexrag.core.evaluation.protocols import (
 )
 from vexrag.core.providers import build_judge_client as build_provider_judge_client
 from vexrag.core.providers.errors import ProviderServiceError
-from vexrag.core.scan_config_build import (
+from vexrag.core.config.build import (
     attack_llm_client_section,
     attack_section,
     build_evaluation_strategy,

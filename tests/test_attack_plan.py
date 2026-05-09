@@ -9,7 +9,7 @@ from vexrag.core.attack_plan import (
 )
 from vexrag.core.attacks.plugin import AttackPlugin
 from vexrag.core.attacks.registry import AttackRegistry, AttackRegistryError
-from vexrag.core.config_errors import ScanConfigError
+from vexrag.core.config import ScanConfigError
 
 
 def _stub_plugin(aid: str) -> AttackPlugin:

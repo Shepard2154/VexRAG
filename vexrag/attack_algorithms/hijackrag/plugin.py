@@ -16,16 +16,8 @@ from vexrag.attack_algorithms.hijackrag.schema import HijackRAGRequest
 from vexrag.core.attacks.command import ConfiguredScanCommand
 from vexrag.core.attacks.plugin import AttackPlugin, GenerateCasesParams
 from vexrag.core.attacks.registry import AttackRegistry, default_attack_registry
-from vexrag.core.config_errors import ScanConfigError
-from vexrag.core.json_generation_client import JSONGenerationLLMClientAdapter
-from vexrag.core.providers import build_judge_client as build_provider_judge_client
-from vexrag.core.scan_config_build import (
-    _bool_option,
-    _float_option,
-    _int_option,
-    _optional_int,
-    _optional_string,
-    _required_string,
+from vexrag.core.config import ScanConfigError
+from vexrag.core.config.build import (
     attack_llm_client_section,
     attack_section,
     build_corpus_poisoner,
@@ -37,6 +29,16 @@ from vexrag.core.scan_config_build import (
     load_case_configs,
     path_strings_from_value,
 )
+from vexrag.core.config.options import (
+    bool_option,
+    float_option,
+    int_option,
+    optional_int,
+    optional_string,
+    required_string,
+)
+from vexrag.core.json_generation_client import JSONGenerationLLMClientAdapter
+from vexrag.core.providers import build_judge_client as build_provider_judge_client
 from vexrag.core.target import HTTPTargetSystemAdapter
 from vexrag.core.target_correct_answer import TargetCorrectAnswerProvider
 
@@ -172,14 +174,14 @@ def _build_hijackrag_request(
     if not isinstance(insert_raw, str) or not insert_raw.strip():
         raise ScanConfigError(f"{prefix}.hijack_insert is required")
     return HijackRAGRequest(
-        query=_required_string(case_config, "query", prefix),
+        query=required_string(case_config, "query", prefix),
         hijack_insert=insert_raw.strip(),
-        correct_answer=_optional_string(case_config.get("correct_answer")),
-        case_id=_optional_string(case_config.get("case_id", case_config.get("id"))),
-        adv_per_query=_int_option(
+        correct_answer=optional_string(case_config.get("correct_answer")),
+        case_id=optional_string(case_config.get("case_id", case_config.get("id"))),
+        adv_per_query=int_option(
             case_config,
             "adv_per_query",
-            _int_option(attack_config, "adv_per_query", 1),
+            int_option(attack_config, "adv_per_query", 1),
         ),
         segment_ids=_hijack_segment_ids_from_case(case_config, prefix),
         correct_answer_style=correct_answer_style_option(
@@ -190,7 +192,7 @@ def _build_hijackrag_request(
             ),
             prefix=prefix,
         ),
-        seed=_optional_int(
+        seed=optional_int(
             case_config.get("seed", attack_config.get("seed")),
             f"{prefix}.seed",
         ),
@@ -230,13 +232,13 @@ def build_hijackrag_scan_config(config: Mapping[str, Any]) -> HijackRAGScanConfi
     if not isinstance(scan_config, Mapping):
         raise ScanConfigError("scan must be a mapping")
     return HijackRAGScanConfig(
-        repetitions=_int_option(scan_config, "repetitions", 1),
-        attack_success_rate_threshold=_float_option(
+        repetitions=int_option(scan_config, "repetitions", 1),
+        attack_success_rate_threshold=float_option(
             scan_config,
             "attack_success_rate_threshold",
             0.0,
         ),
-        override_contexts=_bool_option(scan_config, "override_contexts", False),
+        override_contexts=bool_option(scan_config, "override_contexts", False),
         cleanup=cleanup_option(scan_config),
     )
 

@@ -1,4 +1,4 @@
-from vexrag.core.config_merge import deep_merge_mappings
+from vexrag.core.config import deep_merge_mappings
 
 
 def test_deep_merge_nested_dict() -> None:

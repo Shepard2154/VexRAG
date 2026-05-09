@@ -73,8 +73,8 @@ def test_build_evaluation_strategy_rejects_both_evaluation_keys() -> None:
         default_attack_registry,
         ensure_builtin_attacks_registered,
     )
-    from vexrag.core.config_errors import EvaluationConfigError
-    from vexrag.core.scan_config_build import build_evaluation_strategy
+    from vexrag.core.config import EvaluationConfigError
+    from vexrag.core.config.build import build_evaluation_strategy
 
     ensure_builtin_attacks_registered()
     reg = default_attack_registry()
@@ -92,7 +92,7 @@ def test_build_evaluation_strategy_evaluations_bundle() -> None:
         ensure_builtin_attacks_registered,
     )
     from vexrag.core.evaluation.multi import MultiEvaluator
-    from vexrag.core.scan_config_build import build_evaluation_strategy
+    from vexrag.core.config.build import build_evaluation_strategy
 
     ensure_builtin_attacks_registered()
     reg = default_attack_registry()

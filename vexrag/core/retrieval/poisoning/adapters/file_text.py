@@ -1,39 +1,14 @@
 from collections.abc import Mapping, Sequence
-from enum import StrEnum
 from hashlib import sha256
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any
+
+from ..contracts import CorpusPoisoningError
 
 
-class RetrievalBackend(StrEnum):
-    """backend used to hold retrieved context."""
-    QDRANT = "qdrant"
-    FAISS = "faiss"
-    CHROMA = "chroma"
-    FILE_TEXT = "file_text"
+class FileTextPoisoner:
+    """file_text corpus: one file per poison chunk."""
 
-    def uses_named_collection(self) -> bool:
-        """True when the backend uses a collection name."""
-        return self is not RetrievalBackend.FILE_TEXT
-
-
-class CorpusPoisoningError(RuntimeError):
-    """Raised when poisoned texts cannot be written to a retrieval corpus."""
-
-
-class CorpusPoisoningAdapterProtocol(Protocol):
-    """Adapter contract for writing poisoned texts into retrieval storage."""
-    def add_texts(
-        self,
-        texts: Sequence[str],
-        metadata: Mapping[str, Any],
-    ) -> tuple[str, ...]: ...
-
-    def delete_texts(self, document_ids: Sequence[str]) -> None: ...
-
-
-class FileTextCorpusPoisoningAdapter:
-    """Writes poisoned texts as standalone files in a file_text corpus."""
     __slots__ = ("path", "filename_prefix")
 
     def __init__(self, path: Path, filename_prefix: str) -> None:
@@ -68,16 +43,27 @@ class FileTextCorpusPoisoningAdapter:
         return tuple(document_ids)
 
     def delete_texts(self, document_ids: Sequence[str]) -> None:
+        root = self.path.resolve()
         for raw_document_id in document_ids:
             document_id = str(raw_document_id).strip()
             if not document_id:
                 continue
-            document_path = Path(document_id)
+            candidate = Path(document_id).expanduser()
             try:
-                document_path.unlink(missing_ok=True)
+                resolved = candidate.resolve()
             except OSError as exc:
                 raise CorpusPoisoningError(
-                    f"could not delete poisoned text from file_text corpus: {document_path}"
+                    f"could not resolve corpus document path: {document_id}"
+                ) from exc
+            if resolved != root and root not in resolved.parents:
+                raise CorpusPoisoningError(
+                    f"refusing to delete path outside corpus directory: {document_id}"
+                )
+            try:
+                resolved.unlink(missing_ok=True)
+            except OSError as exc:
+                raise CorpusPoisoningError(
+                    f"could not delete poisoned text from file_text corpus: {resolved}"
                 ) from exc
 
     def _filename(

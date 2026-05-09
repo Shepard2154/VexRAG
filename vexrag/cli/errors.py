@@ -1,4 +1,4 @@
-from vexrag.core.config_errors import EvaluationConfigError, ScanConfigError
+from vexrag.core.config import EvaluationConfigError, ScanConfigError
 
 
 class CLIConfigError(ScanConfigError):

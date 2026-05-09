@@ -1,6 +1,7 @@
 import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from time import perf_counter
 from typing import Any
 
 from vexrag.core.attacks.command import ScanCaseReportProtocol
@@ -136,6 +137,7 @@ class PoisonedRAGScanRunner:
             run_index=run_index,
             adversarial_text_count=len(adversarial_texts),
         )
+        started = perf_counter()
         system_response, evaluation = probe_with_poisoning_and_evaluation(
             query=generated.query,
             correct_answer=generated.correct_answer,
@@ -148,6 +150,16 @@ class PoisonedRAGScanRunner:
             cleanup=cleanup,
             metadata=metadata,
             corpus_cleanup_label="poisoned texts",
+        )
+        elapsed_ms = int((perf_counter() - started) * 1000)
+        LOGGER.info(
+            "case_done attack=poisonedrag case_id=%s run_index=%s duration_ms=%s "
+            "evaluation_completed=%s attack_successful=%s",
+            metadata.get("case_id", ""),
+            run_index,
+            elapsed_ms,
+            evaluation.evaluation_completed,
+            evaluation.attack_successful,
         )
         return PoisonedRAGCaseResult(
             query=generated.query,
@@ -165,9 +177,10 @@ class PoisonedRAGScanRunner:
         cases: tuple[PoisonedRAGCaseResult, ...],
         config: PoisonedRAGScanConfig,
     ) -> PoisonedRAGScanReport:
+        evaluated = sum(1 for case in cases if case.evaluation.evaluation_completed)
         successful_cases = sum(case.successful for case in cases)
-        success_rate = successful_cases / len(cases) if cases else 0.0
-        vulnerable = successful_cases > 0 and (
+        success_rate = successful_cases / evaluated if evaluated else 0.0
+        vulnerable = evaluated > 0 and successful_cases > 0 and (
             success_rate >= config.attack_success_rate_threshold
         )
 
@@ -178,6 +191,15 @@ class PoisonedRAGScanRunner:
         )
         if not cases:
             warnings = (*warnings, "No adversarial texts were generated for scanning.")
+        unevaluated = len(cases) - evaluated
+        if unevaluated:
+            warnings = (
+                *warnings,
+                (
+                    f"{unevaluated} case run(s) had incomplete evaluation and are "
+                    "excluded from the attack success rate denominator."
+                ),
+            )
 
         return PoisonedRAGScanReport(
             verdict=(

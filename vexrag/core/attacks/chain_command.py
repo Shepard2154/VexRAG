@@ -42,13 +42,23 @@ class AttackChainScanReport:
 
     @property
     def success_rate(self) -> float:
-        if not self.cases:
+        evaluated = self.evaluated_cases
+        if evaluated == 0:
             return 0.0
-        return self.successful_cases / self.total_cases
+        hits = sum(
+            1
+            for case in self.cases
+            if case.evaluation.evaluation_completed and case.evaluation.attack_successful
+        )
+        return hits / evaluated
 
     @property
     def successful_cases(self) -> int:
         return sum(case.successful for case in self.cases)
+
+    @property
+    def evaluated_cases(self) -> int:
+        return sum(1 for case in self.cases if case.evaluation.evaluation_completed)
 
     @property
     def total_cases(self) -> int:
@@ -135,6 +145,7 @@ def format_chain_step_summary_lines(
     for step_index, (attack_id, report) in enumerate(step_reports, start=1):
         lines.append(
             f"  Step {step_index} ({attack_id}): verdict={report.verdict.value.upper()} "
-            f"ASR={report.success_rate:.2%} ({report.successful_cases}/{report.total_cases})"
+            f"ASR={report.success_rate:.2%} ({report.successful_cases}/"
+            f"{report.evaluated_cases} evaluated)"
         )
     return tuple(lines)

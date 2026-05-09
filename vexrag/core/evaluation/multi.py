@@ -37,6 +37,43 @@ class MultiEvaluator:
         sub: list[EvaluationResult] = [
             ev.evaluate(evaluation_input) for ev in self._evaluators
         ]
+        all_completed = all(r.evaluation_completed for r in sub)
+        if not all_completed:
+            reasons = [r.reason for r in sub if r.reason]
+            reason = (
+                " | ".join(reasons)
+                if reasons
+                else "One or more evaluators did not complete"
+            )
+            warnings: list[str] = [
+                f"[{index}:{result.strategy}] incomplete"
+                for index, result in enumerate(sub)
+                if not result.evaluation_completed
+            ]
+            for index, result in enumerate(sub):
+                for warning in result.warnings:
+                    warnings.append(f"[{index}:{result.strategy}] {warning}")
+            return EvaluationResult(
+                attack_successful=False,
+                strategy=self.strategy,
+                reason=reason,
+                warnings=tuple(dict.fromkeys(warnings)),
+                evaluation_completed=False,
+                metadata={
+                    "combine": self._combine,
+                    "sub_results": tuple(
+                        {
+                            "strategy": r.strategy,
+                            "attack_successful": r.attack_successful,
+                            "evaluation_completed": r.evaluation_completed,
+                            "scores": dict(r.scores),
+                            "reason": r.reason,
+                        }
+                        for r in sub
+                    ),
+                },
+            )
+
         if self._combine == "all":
             attack_ok = all(r.attack_successful for r in sub)
         else:
@@ -66,6 +103,7 @@ class MultiEvaluator:
                 {
                     "strategy": r.strategy,
                     "attack_successful": r.attack_successful,
+                    "evaluation_completed": r.evaluation_completed,
                     "scores": dict(r.scores),
                     "reason": r.reason,
                 }
@@ -81,4 +119,5 @@ class MultiEvaluator:
             raw_response=raw_parts if raw_parts else None,
             warnings=tuple(dict.fromkeys(warnings)),
             metadata=metadata,
+            evaluation_completed=True,
         )

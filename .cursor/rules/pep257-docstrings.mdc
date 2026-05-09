@@ -1,0 +1,14 @@
+---
+description: PEP 257 docstring edits (prefer fixing existing strings over adding coverage)
+globs: "**/*.py"
+alwaysApply: false
+---
+
+# Docstrings (PEP 257)
+
+- When touching docstrings (or when a task asks to align them), follow [PEP 257](https://peps.python.org/pep-0257/).
+- Prefer **adjusting wording and layout** of docstrings that already exist; **do not** add new docstrings across modules, packages, methods, or `__future__`-using modules solely to satisfy pydocstyle unless the task explicitly requests that coverage work.
+- Use triple double quotes (`"""`).
+- If a module keeps a docstring alongside `from __future__ import ...`, the docstring goes first ([PEP 236](https://peps.python.org/pep-0236/#only-the-docstring-may-precede-the-future-statements)).
+- **One-line**: summary plus closing quotes on one line where it fits (PEP 257).
+- **Multi-line**: start the summary on the same line as the opening `"""` ([Ruff D212](https://docs.astral.sh/ruff/rules/multi-line-summary-first-line/)); one blank line, then extras; closing `"""` on its own line.

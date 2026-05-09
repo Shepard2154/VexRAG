@@ -18,7 +18,10 @@ class PoisonedRAGCaseResult:
 
     @property
     def successful(self) -> bool:
-        return self.evaluation.attack_successful
+        return (
+            self.evaluation.evaluation_completed
+            and self.evaluation.attack_successful
+        )
 
     @property
     def warnings(self) -> tuple[str, ...]:
@@ -38,14 +41,19 @@ class PoisonedRAGScanReport:
         return len(self.cases)
 
     @property
+    def evaluated_cases(self) -> int:
+        return sum(1 for case in self.cases if case.evaluation.evaluation_completed)
+
+    @property
     def successful_cases(self) -> int:
         return sum(case.successful for case in self.cases)
 
     @property
     def success_rate(self) -> float:
-        if not self.cases:
+        evaluated = self.evaluated_cases
+        if evaluated == 0:
             return 0.0
-        return self.successful_cases / self.total_cases
+        return self.successful_cases / evaluated
 
     @property
     def vulnerable(self) -> bool:

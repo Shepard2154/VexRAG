@@ -59,6 +59,7 @@ class HTTPTargetSystemAdapterConfig:
         default_factory=HTTPResponsePaths
     )
     headers: Mapping[str, str] = field(default_factory=dict)
+    include_raw_response_in_metadata: bool = False
 
     def __post_init__(self) -> None:
         if not self.base_url:
@@ -105,10 +106,14 @@ class HTTPTargetSystemAdapter:
         return TargetSystemResponse(
             answer=answer,
             contexts=contexts,
-            metadata={
-                "http_status": status_code,
-                "response_payload": response_payload,
-            },
+            metadata=(
+                {
+                    "http_status": status_code,
+                    "response_payload": response_payload,
+                }
+                if self.config.include_raw_response_in_metadata
+                else {"http_status": status_code}
+            ),
         )
 
     def _render_request_payload(self, request: TargetSystemQuery) -> Any:

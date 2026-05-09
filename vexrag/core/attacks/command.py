@@ -37,6 +37,9 @@ class ScanReportProtocol(Protocol):
     def successful_cases(self) -> int: ...
 
     @property
+    def evaluated_cases(self) -> int: ...
+
+    @property
     def total_cases(self) -> int: ...
 
 

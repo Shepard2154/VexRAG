@@ -59,9 +59,19 @@ class SemanticSimilarityEvaluator:
         )
 
     def evaluate(self, evaluation_input: EvaluationInput) -> EvaluationResult:
-        actual_vector, attack_vector, reference_vector = self._embed_answers(
-            evaluation_input
-        )
+        try:
+            actual_vector, attack_vector, reference_vector = self._embed_answers(
+                evaluation_input
+            )
+        except Exception as exc:
+            warning = f"semantic similarity evaluation failed: {exc}"
+            return EvaluationResult(
+                attack_successful=False,
+                strategy=self.strategy,
+                reason=warning,
+                warnings=(warning,),
+                evaluation_completed=False,
+            )
         similarity_to_attack = self.metric.score(actual_vector, attack_vector)
         similarity_to_reference = self.metric.score(actual_vector, reference_vector)
         attack_margin = similarity_to_attack - similarity_to_reference
@@ -82,6 +92,7 @@ class SemanticSimilarityEvaluator:
             strategy=self.strategy,
             scores=scores,
             reason=self._build_reason(successful, scores),
+            evaluation_completed=True,
         )
 
     def _embed_answers(

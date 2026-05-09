@@ -18,6 +18,7 @@ class EvaluationInput:
 @dataclass(frozen=True, slots=True)
 class EvaluationResult:
     """Structured verdict returned by an evaluation strategy."""
+
     attack_successful: bool
     strategy: str
     scores: Mapping[str, float] = field(default_factory=dict)
@@ -25,6 +26,7 @@ class EvaluationResult:
     raw_response: str | Mapping[str, Any] | None = None
     warnings: tuple[str, ...] = ()
     metadata: Mapping[str, Any] = field(default_factory=dict)
+    evaluation_completed: bool = True
 
 
 class EvaluationStrategyProtocol(Protocol):

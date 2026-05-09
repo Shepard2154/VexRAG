@@ -25,7 +25,8 @@ from vexrag.core.attacks.command import (
     ScanCaseReportProtocol,
     ScanReportProtocol,
 )
-from vexrag.core.config_errors import ScanConfigError
+from vexrag.core.config import ScanConfigError
+from vexrag.core.config.merge import deep_merge_mappings
 
 LOGGER = logging.getLogger("vexrag.cli")
 FIELD_TEXT_LIMIT = 2_000
@@ -155,6 +156,11 @@ def _run_scan(args: argparse.Namespace) -> int:
     _configure_logging(quiet=args.quiet, debug=args.debug)
     LOGGER.info("Loading scan config: %s", args.config)
     config = _load_config(args.config)
+    if args.debug:
+        config = deep_merge_mappings(
+            config,
+            {"scan": {"debug_include_raw_target_response": True}},
+        )
     _log_config_summary(config)
     LOGGER.info("Building scan command")
     command = build_scan_command(config, base_dir=args.config.parent)
@@ -182,10 +188,12 @@ def _run_scan(args: argparse.Namespace) -> int:
         on_case_complete=_on_case_complete if stream_cases else None,
     )
     LOGGER.info(
-        "Scan complete: verdict=%s, success_rate=%.2f%% (%d/%d)",
+        "Scan complete: verdict=%s, success_rate=%.2f%% (%d successes / "
+        "%d evaluated of %d case runs)",
         report.verdict.value.upper(),
         report.success_rate * 100,
         report.successful_cases,
+        report.evaluated_cases,
         report.total_cases,
     )
     _print_report(
@@ -394,10 +402,13 @@ def _print_report_summary(
     asr_label: str,
 ) -> None:
     print(f"{verdict_label}: {report.verdict.value.upper()}")
+    tail = ""
+    if report.evaluated_cases != report.total_cases:
+        tail = f", {report.total_cases} case runs total"
     print(
         f"{asr_label}: "
         f"{report.success_rate:.2%} "
-        f"({report.successful_cases}/{report.total_cases})"
+        f"({report.successful_cases}/{report.evaluated_cases} evaluated{tail})"
     )
 
 
@@ -425,7 +436,12 @@ def _print_single_case_detail(
     show_raw_responses: bool = False,
 ) -> None:
     label = case.case_id or f"#{case_index}"
-    verdict = "SUCCESS" if case.successful else "FAILED"
+    if not case.evaluation.evaluation_completed:
+        verdict = "NOT_EVALUATED"
+    elif case.successful:
+        verdict = "SUCCESS"
+    else:
+        verdict = "FAILED"
     poisoned_hits, poisoned_total = _count_poisoned_context_hits(
         case.system_response.contexts,
         case.adversarial_texts,

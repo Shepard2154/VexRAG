@@ -4,9 +4,9 @@ from pathlib import Path
 from typing import Any
 
 from vexrag.core.attacks.registry import AttackRegistry
-from vexrag.core.config_errors import EvaluationConfigError, ScanConfigError
 from vexrag.core.evaluation import (
     CosineSimilarityMetric,
+    EmbeddingClientProtocol,
     EvaluationStrategyProtocol,
     JudgePromptBuilderProtocol,
     LLMJudgeEvaluator,
@@ -20,13 +20,29 @@ from vexrag.core.providers import (
     build_judge_client as build_provider_judge_client,
 )
 from vexrag.core.retrieval import (
+    ChromaPoisoner,
     CorpusPoisoningAdapterProtocol,
-    FileTextCorpusPoisoningAdapter,
+    FaissPoisoner,
+    FileTextPoisoner,
+    QdrantPoisoner,
     RetrievalBackend,
 )
 from vexrag.core.target import (
     HTTPTargetSystemAdapter,
     HTTPTargetSystemAdapterConfig,
+)
+
+from .errors import EvaluationConfigError, ScanConfigError
+from .options import (
+    bool_option,
+    float_option,
+    int_option,
+    mapping_option,
+    optional_float_option,
+    optional_string,
+    path_option,
+    required_string,
+    string_mapping_option,
 )
 
 
@@ -50,25 +66,35 @@ def build_target_system(config: Mapping[str, Any]) -> HTTPTargetSystemAdapter:
     if not isinstance(http_config, Mapping):
         raise ScanConfigError("target_system.http must be a mapping")
 
+    scan_raw = config.get("scan", {})
+    include_raw_payload = False
+    if isinstance(scan_raw, Mapping):
+        include_raw_payload = bool_option(
+            scan_raw,
+            "debug_include_raw_target_response",
+            False,
+        )
+
     return HTTPTargetSystemAdapter(
         HTTPTargetSystemAdapterConfig(
-            base_url=_required_string(http_config, "base_url", "target_system"),
+            base_url=required_string(http_config, "base_url", "target_system"),
             route=str(http_config.get("route", "")).strip(),
             method=str(http_config.get("method", "POST")).strip(),
-            timeout=_optional_float_option(http_config, "timeout", 10.0),
-            request_template=_mapping_option(
+            timeout=optional_float_option(http_config, "timeout", 10.0),
+            request_template=mapping_option(
                 http_config,
                 "request_template",
                 "target_system",
                 default={"query": "{query}", "contexts": "{contexts}"},
             ),
-            response_paths=_mapping_option(
+            response_paths=mapping_option(
                 http_config,
                 "response_paths",
                 "target_system",
                 default={"answer": "answer", "contexts": "contexts"},
             ),
-            headers=_string_mapping_option(http_config, "headers", "target_system"),
+            headers=string_mapping_option(http_config, "headers", "target_system"),
+            include_raw_response_in_metadata=include_raw_payload,
         )
     )
 
@@ -98,26 +124,199 @@ def build_corpus_poisoner(
             f"scan.corpus_poisoning.backend must be one of: {supported}"
         ) from exc
 
-    if backend is not RetrievalBackend.FILE_TEXT:
-        raise ScanConfigError(
-            f"corpus poisoning for retrieval backend '{backend.value}' is not implemented"
-        )
-
-    file_text_config = _backend_config(poison_config, backend)
-    corpus_path = _path_option(
-        file_text_config,
-        ("path", "directory", "contexts_dir", "corpus_path"),
-        "scan.corpus_poisoning.file_text",
-        base_dir=base_dir,
-    )
+    backend_config = _backend_config(poison_config, backend)
     prefix_raw = poison_config.get("filename_prefix", "poisonedrag")
     if not isinstance(prefix_raw, str) or not prefix_raw.strip():
         filename_prefix = "poisonedrag"
     else:
         filename_prefix = prefix_raw.strip()
-    return FileTextCorpusPoisoningAdapter(
-        path=corpus_path,
-        filename_prefix=filename_prefix,
+
+    if backend is RetrievalBackend.FILE_TEXT:
+        corpus_path = path_option(
+            backend_config,
+            ("path", "directory", "contexts_dir", "corpus_path"),
+            "scan.corpus_poisoning.file_text",
+            base_dir=base_dir,
+        )
+        return FileTextPoisoner(
+            path=corpus_path,
+            filename_prefix=filename_prefix,
+        )
+
+    embedding_section = _corpus_poisoning_embedding_section(
+        backend_config,
+        f"scan.corpus_poisoning.{backend.value}",
+    )
+    embedding_client = build_provider_embedding_client(embedding_section)
+    l2_normalize = bool_option(backend_config, "l2_normalize", False)
+
+    if backend is RetrievalBackend.QDRANT:
+        return _build_qdrant_corpus_poisoner(
+            backend_config,
+            embedding_client=embedding_client,
+            l2_normalize=l2_normalize,
+            base_dir=base_dir,
+        )
+    if backend is RetrievalBackend.CHROMA:
+        return _build_chroma_corpus_poisoner(
+            backend_config,
+            embedding_client=embedding_client,
+            l2_normalize=l2_normalize,
+            base_dir=base_dir,
+        )
+    if backend is RetrievalBackend.FAISS:
+        return _build_faiss_corpus_poisoner(
+            backend_config,
+            embedding_client=embedding_client,
+            l2_normalize=l2_normalize,
+            base_dir=base_dir,
+        )
+    raise ScanConfigError(f"unsupported corpus poisoning backend: {backend.value}")
+
+
+def _corpus_poisoning_embedding_section(
+    backend_cfg: Mapping[str, Any],
+    prefix: str,
+) -> Mapping[str, Any]:
+    emb = backend_cfg.get("embedding_client")
+    if not isinstance(emb, Mapping):
+        raise ScanConfigError(
+            f"{prefix}.embedding_client must be configured "
+            "(must match the target RAG embedding model and preprocessing)"
+        )
+    return emb
+
+
+def _vector_backend_collection_name(
+    backend_cfg: Mapping[str, Any],
+    prefix: str,
+) -> str:
+    for key in ("collection", "collection_name"):
+        raw = backend_cfg.get(key)
+        if isinstance(raw, str) and raw.strip():
+            return raw.strip()
+    raise ScanConfigError(f"{prefix} must set collection or collection_name")
+
+
+def _optional_poison_timeout(
+    backend_cfg: Mapping[str, Any],
+    prefix: str,
+) -> float | None:
+    value = backend_cfg.get("timeout")
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise ScanConfigError(f"{prefix}.timeout must be a number or null")
+    try:
+        out = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ScanConfigError(f"{prefix}.timeout must be a number or null") from exc
+    if out <= 0:
+        raise ScanConfigError(f"{prefix}.timeout must be greater than 0")
+    return out
+
+
+def _build_qdrant_corpus_poisoner(
+    backend_cfg: Mapping[str, Any],
+    *,
+    embedding_client: EmbeddingClientProtocol,
+    l2_normalize: bool,
+    base_dir: Path | None,
+) -> QdrantPoisoner:
+    prefix = "scan.corpus_poisoning.qdrant"
+    url = optional_string(backend_cfg.get("url"))
+    path_str = backend_cfg.get("path")
+    path: Path | None = None
+    if isinstance(path_str, str) and path_str.strip():
+        path = Path(path_str.strip())
+        if not path.is_absolute() and base_dir is not None:
+            path = base_dir / path
+    if url and path:
+        raise ScanConfigError(f"{prefix} must set only one of url or path")
+    if not url and not path:
+        raise ScanConfigError(f"{prefix} must set url or path")
+    collection = _vector_backend_collection_name(backend_cfg, prefix)
+    vector_name = optional_string(backend_cfg.get("vector_name"))
+    timeout = _optional_poison_timeout(backend_cfg, prefix)
+    api_key = optional_string(backend_cfg.get("api_key"))
+    return QdrantPoisoner(
+        url=url,
+        path=path,
+        collection=collection,
+        embedding_client=embedding_client,
+        vector_name=vector_name,
+        timeout=timeout,
+        api_key=api_key,
+        l2_normalize=l2_normalize,
+    )
+
+
+def _build_chroma_corpus_poisoner(
+    backend_cfg: Mapping[str, Any],
+    *,
+    embedding_client: EmbeddingClientProtocol,
+    l2_normalize: bool,
+    base_dir: Path | None,
+) -> ChromaPoisoner:
+    prefix = "scan.corpus_poisoning.chroma"
+    host = optional_string(backend_cfg.get("host"))
+    port = int_option(backend_cfg, "port", 8000)
+    path_str = backend_cfg.get("persist_directory") or backend_cfg.get("path")
+    persist_directory: Path | None = None
+    if host:
+        if isinstance(path_str, str) and path_str.strip():
+            raise ScanConfigError(
+                f"{prefix} cannot set persist_directory/path when host is set"
+            )
+    else:
+        if not isinstance(path_str, str) or not path_str.strip():
+            raise ScanConfigError(
+                f"{prefix} must set persist_directory or path for local Chroma"
+            )
+        persist_directory = Path(path_str.strip())
+        if not persist_directory.is_absolute() and base_dir is not None:
+            persist_directory = base_dir / persist_directory
+    collection_name = _vector_backend_collection_name(backend_cfg, prefix)
+    return ChromaPoisoner(
+        persist_directory=persist_directory,
+        host=host,
+        port=port,
+        collection_name=collection_name,
+        embedding_client=embedding_client,
+        l2_normalize=l2_normalize,
+    )
+
+
+def _build_faiss_corpus_poisoner(
+    backend_cfg: Mapping[str, Any],
+    *,
+    embedding_client: EmbeddingClientProtocol,
+    l2_normalize: bool,
+    base_dir: Path | None,
+) -> FaissPoisoner:
+    prefix = "scan.corpus_poisoning.faiss"
+    faiss_dir = path_option(
+        backend_cfg,
+        ("directory", "path", "faiss_dir"),
+        prefix,
+        base_dir=base_dir,
+    )
+    poison_start = backend_cfg.get("poison_id_start")
+    poison_id_start = -1
+    if poison_start is not None:
+        if isinstance(poison_start, bool):
+            raise ScanConfigError(f"{prefix}.poison_id_start must be an integer")
+        try:
+            poison_id_start = int(poison_start)
+        except (TypeError, ValueError) as exc:
+            raise ScanConfigError(
+                f"{prefix}.poison_id_start must be an integer"
+            ) from exc
+    return FaissPoisoner(
+        faiss_dir,
+        embedding_client,
+        l2_normalize=l2_normalize,
+        poison_id_start=poison_id_start,
     )
 
 
@@ -220,17 +419,17 @@ def _build_semantic_similarity(
     return SemanticSimilarityEvaluator(
         embedding_client=build_provider_embedding_client(embedding_config),
         metric=CosineSimilarityMetric(),
-        attack_similarity_threshold=_float_option(
+        attack_similarity_threshold=float_option(
             strategy_config,
             "attack_similarity_threshold",
             0.75,
         ),
-        max_reference_similarity=_float_option(
+        max_reference_similarity=float_option(
             strategy_config,
             "max_reference_similarity",
             0.6,
         ),
-        attack_margin_threshold=_float_option(
+        attack_margin_threshold=float_option(
             strategy_config,
             "attack_margin_threshold",
             0.1,
@@ -308,100 +507,6 @@ def _target_system_section(config: Mapping[str, Any]) -> Mapping[str, Any]:
     return target_config
 
 
-def _required_string(config: Mapping[str, Any], key: str, prefix: str) -> str:
-    value = config.get(key)
-    if not isinstance(value, str) or not value.strip():
-        raise ScanConfigError(f"{prefix}.{key} is required")
-    return value.strip()
-
-
-def _optional_string(value: Any) -> str | None:
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        raise ScanConfigError("optional string values must be strings")
-    stripped = value.strip()
-    return stripped or None
-
-
-def _mapping_option(
-    config: Mapping[str, Any],
-    key: str,
-    prefix: str,
-    *,
-    default: Mapping[str, Any],
-) -> Mapping[str, Any]:
-    value = config.get(key, default)
-    if not isinstance(value, Mapping):
-        raise ScanConfigError(f"{prefix}.{key} must be a mapping")
-    return value
-
-
-def _string_mapping_option(
-    config: Mapping[str, Any],
-    key: str,
-    prefix: str,
-) -> Mapping[str, str]:
-    value = config.get(key, {})
-    if not isinstance(value, Mapping):
-        raise ScanConfigError(f"{prefix}.{key} must be a mapping")
-    return {str(name): str(item) for name, item in value.items()}
-
-
-def _int_option(config: Mapping[str, Any], key: str, default: int) -> int:
-    value = config.get(key, default)
-    if isinstance(value, bool):
-        raise ScanConfigError(f"{key} must be an integer")
-    try:
-        return int(value)
-    except (TypeError, ValueError) as exc:
-        raise ScanConfigError(f"{key} must be an integer") from exc
-
-
-def _optional_int(value: Any, name: str) -> int | None:
-    if value is None:
-        return None
-    if isinstance(value, bool):
-        raise ScanConfigError(f"{name} must be an integer")
-    try:
-        return int(value)
-    except (TypeError, ValueError) as exc:
-        raise ScanConfigError(f"{name} must be an integer") from exc
-
-
-def _bool_option(config: Mapping[str, Any], key: str, default: bool) -> bool:
-    value = config.get(key, default)
-    if not isinstance(value, bool):
-        raise ScanConfigError(f"{key} must be a boolean")
-    return value
-
-
-def _float_option(config: Mapping[str, Any], key: str, default: float) -> float:
-    value = config.get(key, default)
-    if isinstance(value, bool):
-        raise EvaluationConfigError(f"{key} must be a number")
-    try:
-        return float(value)
-    except (TypeError, ValueError) as exc:
-        raise EvaluationConfigError(f"{key} must be a number") from exc
-
-
-def _optional_float_option(
-    config: Mapping[str, Any],
-    key: str,
-    default: float,
-) -> float | None:
-    value = config.get(key, default)
-    if value is None:
-        return None
-    if isinstance(value, bool):
-        raise ScanConfigError(f"{key} must be a number or null")
-    try:
-        return float(value)
-    except (TypeError, ValueError) as exc:
-        raise ScanConfigError(f"{key} must be a number or null") from exc
-
-
 def target_style_option(
     config: Mapping[str, Any],
     *,
@@ -449,34 +554,6 @@ def poisoning_style_option(
     return value
 
 
-def path_option(
-    config: Mapping[str, Any],
-    keys: tuple[str, ...],
-    prefix: str,
-    *,
-    base_dir: Path | None,
-) -> Path:
-    for key in keys:
-        value = config.get(key)
-        if isinstance(value, str) and value.strip():
-            path = Path(value.strip())
-            if not path.is_absolute() and base_dir is not None:
-                path = base_dir / path
-            return path
-    expected = ", ".join(keys)
-    raise ScanConfigError(f"{prefix} must configure one of: {expected}")
-
-
-def _path_option(
-    config: Mapping[str, Any],
-    keys: tuple[str, ...],
-    prefix: str,
-    *,
-    base_dir: Path | None,
-) -> Path:
-    return path_option(config, keys, prefix, base_dir=base_dir)
-
-
 def _backend_config(
     config: Mapping[str, Any],
     backend: RetrievalBackend,
@@ -497,7 +574,7 @@ def cleanup_option(scan_config: Mapping[str, Any]) -> bool:
         return False
     if not isinstance(poison_config, Mapping):
         raise ScanConfigError("scan.corpus_poisoning must be a mapping")
-    return _bool_option(poison_config, "cleanup", False)
+    return bool_option(poison_config, "cleanup", False)
 
 
 def path_strings_from_value(value: Any, prefix: str) -> tuple[str, ...]:

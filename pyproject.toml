@@ -16,6 +16,15 @@ dependencies = [
 vx = "vexrag.cli.main:main"
 
 [project.optional-dependencies]
+qdrant = [
+    "qdrant-client>=1.11.0",
+]
+chroma = [
+    "chromadb>=0.5.0",
+]
+faiss = [
+    "faiss-cpu>=1.8.0",
+]
 dev = [
     "pre-commit>=3.8.0",
     "poethepoet>=0.29.0",
@@ -88,7 +97,7 @@ exclude = [
 [tool.ruff.lint]
 # Start with a pragmatic baseline: errors, pyflakes, import sorting,
 # bugbear, and pyupgrade checks.
-select = ["E", "F", "I", "B", "UP", "D202"]
+select = ["E", "F", "I", "B", "UP", "TID251", "D202"]
 # Formatter handles line-length and trailing commas.
 ignore = ["E501", "COM812"]
 
@@ -97,6 +106,9 @@ fixable = ["ALL"]
 unfixable = []
 
 # Imports
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"__future__.annotations".msg = "Disallowed by project policy (Python 3.11+): use string annotations or typing.TYPE_CHECKING for forward references."
+
 [tool.ruff.lint.isort]
 known-first-party = ["vexrag"]
 

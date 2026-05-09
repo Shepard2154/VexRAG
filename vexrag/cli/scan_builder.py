@@ -16,15 +16,15 @@ from vexrag.core.attacks.command import (
     ConfiguredScanCommand,
     ScanCommandProtocol,
 )
-from vexrag.core.config_errors import ScanConfigError
-from vexrag.core.llm_scan_probe import probe_scan_llms_for_materialized_config
-from vexrag.core.scan_config_build import (
+from vexrag.core.config import ScanConfigError
+from vexrag.core.config.build import (
     build_corpus_poisoner,
     build_target_system,
 )
-from vexrag.core.scan_config_build import (
+from vexrag.core.config.build import (
     build_evaluation_strategy as assemble_evaluation_strategy,
 )
+from vexrag.core.llm_scan_probe import probe_scan_llms_for_materialized_config
 
 ScanCommand = ScanCommandProtocol
 

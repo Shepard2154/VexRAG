@@ -15,16 +15,8 @@ from vexrag.attack_algorithms.poisonedrag.schema import PoisonedRAGRequest
 from vexrag.core.attacks.command import ConfiguredScanCommand
 from vexrag.core.attacks.plugin import AttackPlugin, GenerateCasesParams
 from vexrag.core.attacks.registry import AttackRegistry, default_attack_registry
-from vexrag.core.config_errors import ScanConfigError
-from vexrag.core.json_generation_client import JSONGenerationLLMClientAdapter
-from vexrag.core.providers import build_judge_client as build_provider_judge_client
-from vexrag.core.scan_config_build import (
-    _bool_option,
-    _float_option,
-    _int_option,
-    _optional_int,
-    _optional_string,
-    _required_string,
+from vexrag.core.config import ScanConfigError
+from vexrag.core.config.build import (
     attack_llm_client_section,
     attack_section,
     build_corpus_poisoner,
@@ -37,6 +29,16 @@ from vexrag.core.scan_config_build import (
     poisoning_style_option,
     target_style_option,
 )
+from vexrag.core.config.options import (
+    bool_option,
+    float_option,
+    int_option,
+    optional_int,
+    optional_string,
+    required_string,
+)
+from vexrag.core.json_generation_client import JSONGenerationLLMClientAdapter
+from vexrag.core.providers import build_judge_client as build_provider_judge_client
 from vexrag.core.target import HTTPTargetSystemAdapter
 from vexrag.core.target_correct_answer import TargetCorrectAnswerProvider
 
@@ -114,16 +116,16 @@ def _build_poisonedrag_request(
 ) -> PoisonedRAGRequest:
     prefix = f"attack.poisonedrag.cases[{case_number}]"
     return PoisonedRAGRequest(
-        query=_required_string(case_config, "query", prefix),
-        correct_answer=_optional_string(case_config.get("correct_answer")),
-        target_incorrect_answer=_optional_string(
+        query=required_string(case_config, "query", prefix),
+        correct_answer=optional_string(case_config.get("correct_answer")),
+        target_incorrect_answer=optional_string(
             case_config.get("target_incorrect_answer")
         ),
-        case_id=_optional_string(case_config.get("case_id", case_config.get("id"))),
-        adv_per_query=_int_option(
+        case_id=optional_string(case_config.get("case_id", case_config.get("id"))),
+        adv_per_query=int_option(
             case_config,
             "adv_per_query",
-            _int_option(attack_config, "adv_per_query", 3),
+            int_option(attack_config, "adv_per_query", 3),
         ),
         target_style=target_style_option(
             case_config,
@@ -135,7 +137,7 @@ def _build_poisonedrag_request(
             default=poisoning_style_option(attack_config),
             prefix=prefix,
         ),
-        seed=_optional_int(
+        seed=optional_int(
             case_config.get("seed", attack_config.get("seed")),
             f"{prefix}.seed",
         ),
@@ -175,13 +177,13 @@ def build_poisonedrag_scan_config(config: Mapping[str, Any]) -> PoisonedRAGScanC
     if not isinstance(scan_config, Mapping):
         raise ScanConfigError("scan must be a mapping")
     return PoisonedRAGScanConfig(
-        repetitions=_int_option(scan_config, "repetitions", 1),
-        attack_success_rate_threshold=_float_option(
+        repetitions=int_option(scan_config, "repetitions", 1),
+        attack_success_rate_threshold=float_option(
             scan_config,
             "attack_success_rate_threshold",
             0.0,
         ),
-        override_contexts=_bool_option(scan_config, "override_contexts", False),
+        override_contexts=bool_option(scan_config, "override_contexts", False),
         cleanup=cleanup_option(scan_config),
     )
 
