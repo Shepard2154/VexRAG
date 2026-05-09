@@ -1,7 +1,9 @@
 import logging
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
+
+from vexrag.core.attacks.command import ScanCaseReportProtocol
 
 from vexrag.attack_algorithms.poisonedrag.generator import PoisonedRAGGenerator
 from vexrag.attack_algorithms.poisonedrag.report import (
@@ -54,6 +56,8 @@ class PoisonedRAGScanRunner:
         self,
         requests: Sequence[PoisonedRAGRequest],
         config: PoisonedRAGScanConfig | None = None,
+        *,
+        on_case_complete: Callable[[ScanCaseReportProtocol], None] | None = None,
     ) -> PoisonedRAGScanReport:
         scan_config = config or PoisonedRAGScanConfig()
         if not requests:
@@ -71,7 +75,15 @@ class PoisonedRAGScanRunner:
                 case_label,
             )
             generated_results.append(generated)
-            cases.extend(self._run_cases(generated, request, case_index, scan_config))
+            cases.extend(
+                self._run_cases(
+                    generated,
+                    request,
+                    case_index,
+                    scan_config,
+                    on_case_complete=on_case_complete,
+                )
+            )
 
         return self._build_report(tuple(generated_results), tuple(cases), scan_config)
 
@@ -81,6 +93,8 @@ class PoisonedRAGScanRunner:
         request: PoisonedRAGRequest,
         case_index: int,
         config: PoisonedRAGScanConfig,
+        *,
+        on_case_complete: Callable[[ScanCaseReportProtocol], None] | None = None,
     ) -> tuple[PoisonedRAGCaseResult, ...]:
         cases: list[PoisonedRAGCaseResult] = []
         for run_index in range(1, config.repetitions + 1):
@@ -90,17 +104,18 @@ class PoisonedRAGScanRunner:
                 run_index,
                 len(generated.adv_texts),
             )
-            cases.append(
-                self._run_case(
-                    generated=generated,
-                    request=request,
-                    adversarial_texts=tuple(generated.adv_texts),
-                    case_index=case_index,
-                    run_index=run_index,
-                    override_contexts=config.override_contexts,
-                    cleanup=config.cleanup,
-                )
+            finished = self._run_case(
+                generated=generated,
+                request=request,
+                adversarial_texts=tuple(generated.adv_texts),
+                case_index=case_index,
+                run_index=run_index,
+                override_contexts=config.override_contexts,
+                cleanup=config.cleanup,
             )
+            cases.append(finished)
+            if on_case_complete is not None:
+                on_case_complete(finished)
         return tuple(cases)
 
     def _run_case(

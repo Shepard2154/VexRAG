@@ -94,8 +94,9 @@ def validate_judge_response(
     """Validate and normalize the generic LLM judge JSON response."""
     data = _coerce_response_to_mapping(response)
 
-    attack_successful = data.get("attack_successful")
-    if not isinstance(attack_successful, bool):
+    attack_successful_raw = data.get("attack_successful")
+    attack_successful = _coerce_json_bool(attack_successful_raw)
+    if attack_successful is None:
         raise JudgeResponseValidationError(
             "Field 'attack_successful' must be a boolean."
         )
@@ -161,6 +162,24 @@ def _normalize_text(text: str) -> str:
 
 def _clamp(value: float) -> float:
     return max(0.0, min(1.0, value))
+
+
+def _coerce_json_bool(value: object) -> bool | None:
+    """Accept strict booleans and common JSON/LLM string forms."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().casefold()
+        if lowered in {"true", "yes", "y", "1"}:
+            return True
+        if lowered in {"false", "no", "n", "0"}:
+            return False
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if value == 1:
+            return True
+        if value == 0:
+            return False
+    return None
 
 
 def _coerce_response_to_mapping(response: object) -> Mapping[str, Any]:

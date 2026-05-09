@@ -162,7 +162,25 @@ def _run_scan(args: argparse.Namespace) -> int:
     if requests:
         LOGGER.info("Loaded %d scan case(s)", len(requests))
     LOGGER.info("Running scan")
-    report = command.run()
+    stream_cases = not args.quiet
+    if stream_cases:
+        print("VexRAG Scan", flush=True)
+        print(flush=True)
+        print("Case details:", flush=True)
+
+    case_ordinal: list[int] = [0]
+
+    def _on_case_complete(case: ScanCaseReportProtocol) -> None:
+        case_ordinal[0] += 1
+        _print_single_case_detail(
+            case_ordinal[0],
+            case,
+            show_raw_responses=args.debug,
+        )
+
+    report = command.run(
+        on_case_complete=_on_case_complete if stream_cases else None,
+    )
     LOGGER.info(
         "Scan complete: verdict=%s, success_rate=%.2f%% (%d/%d)",
         report.verdict.value.upper(),
@@ -170,7 +188,11 @@ def _run_scan(args: argparse.Namespace) -> int:
         report.successful_cases,
         report.total_cases,
     )
-    _print_report(report, show_raw_responses=args.debug)
+    _print_report(
+        report,
+        show_raw_responses=args.debug,
+        cases_emitted_during_run=stream_cases,
+    )
     return 0
 
 
@@ -335,17 +357,24 @@ def _print_report(
     report: ScanReportProtocol,
     *,
     show_raw_responses: bool = False,
+    cases_emitted_during_run: bool = False,
 ) -> None:
-    print("VexRAG Scan")
+    if not cases_emitted_during_run:
+        print("VexRAG Scan")
     if isinstance(report, AttackChainScanReport) and len(report.step_reports) > 1:
+        if cases_emitted_during_run:
+            print()
         print("Per-step summary:")
         for line in format_chain_step_summary_lines(report.step_reports):
             print(line)
         print()
+    elif cases_emitted_during_run:
+        print()
     _print_report_summary(report, verdict_label="Verdict", asr_label="Success rate")
     print(f"Cases: {report.total_cases}")
     print()
-    _print_case_details(report.cases, show_raw_responses=show_raw_responses)
+    if not cases_emitted_during_run:
+        _print_case_details(report.cases, show_raw_responses=show_raw_responses)
 
     warnings = _collect_warnings(report)
     if warnings:
@@ -382,38 +411,52 @@ def _print_case_details(
 
     print("Case details:")
     for case_index, case in enumerate(cases, start=1):
-        label = case.case_id or f"#{case_index}"
-        verdict = "SUCCESS" if case.successful else "FAILED"
-        poisoned_hits, poisoned_total = _count_poisoned_context_hits(
-            case.system_response.contexts,
-            case.adversarial_texts,
+        _print_single_case_detail(
+            case_index,
+            case,
+            show_raw_responses=show_raw_responses,
         )
-        print()
-        print(f"  Case {case_index}: {label} (run {case.run_index}) - {verdict}")
-        _print_case_statistics(
-            evaluation=case.evaluation,
-            contexts=case.system_response.contexts,
-            poisoned_hits=poisoned_hits,
-            poisoned_total=poisoned_total,
-            adversarial_texts=case.adversarial_texts,
+
+
+def _print_single_case_detail(
+    case_index: int,
+    case: ScanCaseReportProtocol,
+    *,
+    show_raw_responses: bool = False,
+) -> None:
+    label = case.case_id or f"#{case_index}"
+    verdict = "SUCCESS" if case.successful else "FAILED"
+    poisoned_hits, poisoned_total = _count_poisoned_context_hits(
+        case.system_response.contexts,
+        case.adversarial_texts,
+    )
+    print(flush=True)
+    print(f"  Case {case_index}: {label} (run {case.run_index}) - {verdict}", flush=True)
+    _print_case_statistics(
+        evaluation=case.evaluation,
+        contexts=case.system_response.contexts,
+        poisoned_hits=poisoned_hits,
+        poisoned_total=poisoned_total,
+        adversarial_texts=case.adversarial_texts,
+    )
+    _print_field("Query", case.query)
+    _print_field("Expected incorrect answer", case.expected_incorrect_answer)
+    _print_field("LLM answer", case.system_response.answer)
+    if case.evaluation.reason:
+        _print_field("Evaluation reason", case.evaluation.reason)
+    if show_raw_responses and case.evaluation.raw_response is not None:
+        _print_field(
+            "Judge raw response",
+            _format_raw_response(case.evaluation.raw_response),
         )
-        _print_field("Query", case.query)
-        _print_field("Expected incorrect answer", case.expected_incorrect_answer)
-        _print_field("LLM answer", case.system_response.answer)
-        if case.evaluation.reason:
-            _print_field("Evaluation reason", case.evaluation.reason)
-        if show_raw_responses and case.evaluation.raw_response is not None:
-            _print_field(
-                "Judge raw response",
-                _format_raw_response(case.evaluation.raw_response),
-            )
-        _print_contexts(case.system_response.contexts, show_summary=False)
-        _print_poisoned_context_hit_rate(
-            hits=poisoned_hits,
-            total=poisoned_total,
-            show_summary=False,
-        )
-        _print_adversarial_texts(case.adversarial_texts, show_summary=False)
+    _print_contexts(case.system_response.contexts, show_summary=False)
+    _print_poisoned_context_hit_rate(
+        hits=poisoned_hits,
+        total=poisoned_total,
+        show_summary=False,
+    )
+    _print_adversarial_texts(case.adversarial_texts, show_summary=False)
+    sys.stdout.flush()
 
 
 def _format_evaluation(evaluation: Any) -> str:

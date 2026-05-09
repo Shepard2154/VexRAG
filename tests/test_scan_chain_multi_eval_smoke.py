@@ -17,6 +17,15 @@ def _register_builtin_attacks() -> None:
     ensure_builtin_attacks_registered()
 
 
+@pytest.fixture(autouse=True)
+def _noop_llm_probe(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Example YAML targets localhost Ollama; this test only checks wiring."""
+    monkeypatch.setattr(
+        "vexrag.cli.scan_builder.probe_scan_llms_for_materialized_config",
+        lambda *args, **kwargs: None,
+    )
+
+
 def test_chain_example_yaml_wires_two_steps_and_multi_evaluator() -> None:
     path = (
         Path(__file__).resolve().parents[1]

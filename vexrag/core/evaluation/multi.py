@@ -25,6 +25,10 @@ class MultiEvaluator:
         self._combine: str = combine
 
     @property
+    def sub_evaluators(self) -> tuple[EvaluationStrategyProtocol, ...]:
+        return self._evaluators
+
+    @property
     def strategy(self) -> str:
         inner = "+".join(e.strategy for e in self._evaluators)
         return f"multi({self._combine}:{inner})"

@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from typing import Any, Protocol
 
 from vexrag.core.evaluation import EvaluationResult
@@ -41,7 +42,12 @@ class ScanReportProtocol(Protocol):
 
 class ScanCommandProtocol(Protocol):
     """Runnable scan assembled from config (CLI, web, or programmatic)."""
-    def run(self) -> ScanReportProtocol: ...
+
+    def run(
+        self,
+        *,
+        on_case_complete: Callable[[ScanCaseReportProtocol], None] | None = None,
+    ) -> ScanReportProtocol: ...
 
 
 class ConfiguredScanCommand:
@@ -53,5 +59,13 @@ class ConfiguredScanCommand:
         self.requests = requests
         self.scan_config = scan_config
 
-    def run(self) -> ScanReportProtocol:
-        return self.runner.run(self.requests, self.scan_config)
+    def run(
+        self,
+        *,
+        on_case_complete: Callable[[ScanCaseReportProtocol], None] | None = None,
+    ) -> ScanReportProtocol:
+        return self.runner.run(
+            self.requests,
+            self.scan_config,
+            on_case_complete=on_case_complete,
+        )

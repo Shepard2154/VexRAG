@@ -1,4 +1,4 @@
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -72,7 +72,11 @@ class AttackChainScanCommand:
                 merged.extend(chunk)
         return tuple(merged)
 
-    def run(self) -> AttackChainScanReport:
+    def run(
+        self,
+        *,
+        on_case_complete: Callable[[ScanCaseReportProtocol], None] | None = None,
+    ) -> AttackChainScanReport:
         step_reports: list[tuple[str, ScanReportProtocol]] = []
         flat_cases: list[ScanCaseReportProtocol] = []
         warn: list[str] = []
@@ -80,7 +84,29 @@ class AttackChainScanCommand:
         step_index = 0
         for attack_id, command in self._steps:
             step_index += 1
-            report = command.run()
+            sid = step_index
+            aid = attack_id
+
+            def step_callback(
+                case: ScanCaseReportProtocol,
+                *,
+                _sid: int = sid,
+                _aid: str = aid,
+            ) -> None:
+                if on_case_complete is None:
+                    return
+                labeled = _ChainLabeledCase(
+                    case,
+                    step_index=_sid,
+                    attack_id=_aid,
+                )
+                on_case_complete(labeled)
+
+            report = command.run(
+                on_case_complete=(
+                    step_callback if on_case_complete is not None else None
+                ),
+            )
             step_reports.append((attack_id, report))
             warn.extend(report.warnings)
             if report.verdict is ScanVerdict.VULNERABLE:

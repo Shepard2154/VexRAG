@@ -24,6 +24,12 @@ class _FixedEvaluator:
         )
 
 
+def test_multi_sub_evaluators_exposes_children() -> None:
+    inner = (_FixedEvaluator("a", False), _FixedEvaluator("b", True))
+    m = MultiEvaluator(inner, combine="any")
+    assert m.sub_evaluators == inner
+
+
 def test_multi_any_true_if_one_succeeds() -> None:
     m = MultiEvaluator(
         (_FixedEvaluator("a", False), _FixedEvaluator("b", True)),
@@ -63,10 +69,12 @@ def test_multi_empty_raises() -> None:
 
 
 def test_build_evaluation_strategy_rejects_both_evaluation_keys() -> None:
+    from vexrag.core.attacks import (
+        default_attack_registry,
+        ensure_builtin_attacks_registered,
+    )
     from vexrag.core.config_errors import EvaluationConfigError
     from vexrag.core.scan_config_build import build_evaluation_strategy
-
-    from vexrag.core.attacks import default_attack_registry, ensure_builtin_attacks_registered
 
     ensure_builtin_attacks_registered()
     reg = default_attack_registry()
@@ -79,10 +87,12 @@ def test_build_evaluation_strategy_rejects_both_evaluation_keys() -> None:
 
 
 def test_build_evaluation_strategy_evaluations_bundle() -> None:
+    from vexrag.core.attacks import (
+        default_attack_registry,
+        ensure_builtin_attacks_registered,
+    )
     from vexrag.core.evaluation.multi import MultiEvaluator
     from vexrag.core.scan_config_build import build_evaluation_strategy
-
-    from vexrag.core.attacks import default_attack_registry, ensure_builtin_attacks_registered
 
     ensure_builtin_attacks_registered()
     reg = default_attack_registry()

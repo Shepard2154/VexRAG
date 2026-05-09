@@ -17,6 +17,7 @@ from vexrag.core.attacks.command import (
     ScanCommandProtocol,
 )
 from vexrag.core.config_errors import ScanConfigError
+from vexrag.core.llm_scan_probe import probe_scan_llms_for_materialized_config
 from vexrag.core.scan_config_build import (
     build_corpus_poisoner,
     build_target_system,
@@ -46,13 +47,23 @@ def build_scan_command(
         steps = filtered
     if len(steps) == 1:
         materialized = materialize_step_config(config, steps[0])
+        probe_scan_llms_for_materialized_config(
+            materialized,
+            attack_id=steps[0].attack_id,
+            step_label=f"attack step ({steps[0].attack_id})",
+        )
         return registry.get(steps[0].attack_id).build_scan_command(
             materialized,
             base_dir,
         )
     built: list[tuple[str, ScanCommandProtocol]] = []
-    for step in steps:
+    for step_index, step in enumerate(steps, start=1):
         materialized = materialize_step_config(config, step)
+        probe_scan_llms_for_materialized_config(
+            materialized,
+            attack_id=step.attack_id,
+            step_label=f"chain step {step_index}/{len(steps)} ({step.attack_id})",
+        )
         built.append(
             (
                 step.attack_id,
