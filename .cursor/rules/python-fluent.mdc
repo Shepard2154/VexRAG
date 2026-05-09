@@ -1,0 +1,21 @@
+---
+description: Python coding rules inspired by Fluent Python
+globs: "**/*.py"
+alwaysApply: false
+---
+
+# Python Style (Fluent Python)
+
+- Target **Python 3.11+** only; skip legacy-compat patterns (see `.cursor/rules/python-311-minimum.mdc`).
+- Write idiomatic Python: clear, explicit, and concise.
+- Prefer core data model features (`__iter__`, `__len__`, `__repr__`, `__enter__`/`__exit__`) over ad-hoc helper APIs when appropriate.
+- Favor protocols and duck typing over deep inheritance trees.
+- Use EAFP style (`try`/`except`) when it improves readability and avoids redundant checks.
+- Prefer comprehensions and generator expressions to verbose loops when they stay readable.
+- Use standard library tools (`dataclasses`, `collections`, `pathlib`, `itertools`, `functools`) before custom utilities.
+- Keep functions small and composable; avoid side effects in utility functions unless required.
+- Use type hints where they clarify public contracts; avoid noisy or redundant annotations.
+- Represent domain objects with meaningful types instead of loose dictionaries when possible.
+- In package facades, write `__all__` as a single explicit list grouped by short section comments; avoid helper constants used only to assemble exports.
+- Avoid Java-style patterns in Python code (excessive getters/setters, unnecessary classes, boilerplate-heavy code).
+- When editing existing docstrings, align them with PEP 257; avoid adding broad docstring coverage unless asked (see `.cursor/rules/pep257-docstrings.mdc`).

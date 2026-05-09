@@ -1,0 +1,1 @@
+This methodology ensures that sensitive corporate data never leaves the secure governance boundary of the Oracle environment.

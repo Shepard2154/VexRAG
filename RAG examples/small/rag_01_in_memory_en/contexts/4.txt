@@ -1,0 +1,1 @@
+At the core of this architecture is the Oracle Database 23ai, which integrates vector search natively alongside relational data.

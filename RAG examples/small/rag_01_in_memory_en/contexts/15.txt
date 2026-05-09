@@ -1,0 +1,1 @@
+Retrieval Augmented Generation (RAG) in Oracle adapts dynamically; as soon as a record is updated in the database, it is immediately available for retrieval.

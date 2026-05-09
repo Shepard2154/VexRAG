@@ -1,0 +1,1 @@
+By keeping data in Oracle, the system eliminates the complexity of synchronizing a separate vector database with the operational database.

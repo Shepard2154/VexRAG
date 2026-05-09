@@ -1,0 +1,11 @@
+---
+description: Use real infrastructure for validation runs
+alwaysApply: true
+---
+
+# Real Infrastructure Validation
+
+- Run smoke, integration, and validation checks against the real local infrastructure when it is available.
+- Do not replace Ollama or target services with fake/stub servers unless the user explicitly asks for an isolated test double.
+- For Ollama checks, prefer portable CLI commands such as `ollama list`, `ollama ps`, `ollama show <model>`, and `ollama run <model> <prompt>`.
+- If real infrastructure is unavailable, report that clearly instead of silently substituting mocks.

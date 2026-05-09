@@ -1,0 +1,14 @@
+---
+description: Keep code changes minimal and task-focused
+alwaysApply: true
+---
+
+# Minimal Changes Policy
+
+- Deliver the smallest change set that fully solves the requested task.
+- Prefer localized edits over broad refactors unless refactoring is required for correctness.
+- Do not rename, move, or reformat unrelated code.
+- Do not modify files unrelated to the request.
+- Preserve existing behavior and public interfaces unless the task explicitly asks to change them.
+- Keep diffs easy to review: one concern per change, no opportunistic cleanup.
+- Add or update tests only for the changed behavior, not for unrelated areas.
