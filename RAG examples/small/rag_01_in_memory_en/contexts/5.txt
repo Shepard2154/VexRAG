@@ -1,0 +1,1 @@
+Unlike external platforms that require data replication (ETL), Oracle allows for 'Integrated Vectorization', meaning vectors and business data coexist in real-time.

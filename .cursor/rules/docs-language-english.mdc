@@ -1,0 +1,10 @@
+---
+description: Keep project instructions and docs in English
+alwaysApply: true
+---
+
+# Documentation Language
+
+- Write all user-facing instructions in English.
+- Keep README files, setup steps, and runbooks in English.
+- For mixed-language content, provide the instruction text in English.

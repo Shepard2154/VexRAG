@@ -1,0 +1,10 @@
+---
+description: Use LLM-only generation in RAG examples
+alwaysApply: true
+---
+
+# RAG Generation Policy
+
+- RAG systems in this project must use LLM-based answer generation.
+- Do not add extractive-only fallback answer logic.
+- If LLM is unavailable, return an explicit service error instead of heuristic answers.

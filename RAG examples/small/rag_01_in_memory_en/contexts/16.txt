@@ -1,0 +1,1 @@
+This eliminates the 'stale data' problem common in architectures that rely on external vector stores like Pinecone or FAISS.

@@ -1,0 +1,24 @@
+{
+  "dataset": "benchmark.jsonl",
+  "poison_dir": "poisoned_contexts",
+  "nq_dataset": {
+    "enabled": true,
+    "name": "natural_questions",
+    "split": "train",
+    "limit": 2000
+  },
+  "chroma_dir": "chroma_data",
+  "chroma_collection": "nq_passages",
+  "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+  "top_k": 5,
+  "host": "0.0.0.0",
+  "port": 8080,
+  "llm": {
+    "timeout_seconds": 30,
+    "ollama": {
+      "base_url": "http://localhost:11434",
+      "model": "llama3:8b",
+      "temperature": 0.0
+    }
+  }
+}

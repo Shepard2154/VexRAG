@@ -1,0 +1,137 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vexrag"
+version = "0.1.3"
+description = "Red Team testing for functional correctness of RAG systems under attack conditions."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+keywords = ["rag", "security", "red-team", "llm", "evaluation"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "PyYAML",
+]
+
+[project.urls]
+Homepage = "https://github.com/Shepard2154/VexRAG"
+Repository = "https://github.com/Shepard2154/VexRAG"
+
+[project.scripts]
+vx = "vexrag.cli.main:main"
+
+[project.optional-dependencies]
+qdrant = [
+    "qdrant-client>=1.11.0",
+]
+chroma = [
+    "chromadb>=0.5.0",
+]
+faiss = [
+    "faiss-cpu>=1.8.0",
+]
+dev = [
+    "pre-commit>=3.8.0",
+    "poethepoet>=0.29.0",
+    "pytest>=8.0",
+    "ruff>=0.8.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["vexrag*"]
+
+[tool.setuptools.package-data]
+"vexrag.attack_algorithms.hijackrag" = [
+    "segment_templates/*.jsonl",
+    "segment_templates/*.json",
+]
+
+[tool.poe.tasks]
+lint = "ruff check ."
+format = "ruff format ."
+lint-vexrag = "ruff check vexrag/"
+
+[tool.poe.tasks.check]
+help = "Run ruff check and verify formatting (no writes)"
+shell = "ruff check . && ruff format --check ."
+
+[tool.poe.tasks.fix]
+help = "Auto-fix ruff issues and format the tree"
+shell = "ruff check --fix . && ruff format ."
+
+[tool.poe.tasks.fix-vexrag]
+help = "Auto-fix and format only the vexrag package"
+shell = "ruff check --fix vexrag/ && ruff format vexrag/"
+
+[tool.poe.tasks.install-dev]
+help = "Editable install with dev extras (run after cloning)"
+shell = "pip install -e \".[dev]\""
+
+[tool.poe.tasks.lint-file]
+help = "Lint a single file"
+cmd = "ruff check \"${file}\""
+args = [{ name = "file", positional = true, required = true, help = "Path to a Python file" }]
+
+[tool.poe.tasks.fix-file]
+help = "Auto-fix and format a single file"
+shell = "ruff check --fix \"$file\" && ruff format \"$file\""
+args = [{ name = "file", positional = true, required = true, help = "Path to a Python file" }]
+
+[tool.ruff]
+# Maximum line length
+line-length = 88
+
+# Target Python version
+target-version = "py311"
+
+# Excluded files and directories
+exclude = [
+    ".git",
+    ".ruff_cache",
+    "__pycache__",
+    "venv",
+    "build",
+    "dist",
+]
+
+[tool.ruff.lint]
+# Start with a pragmatic baseline: errors, pyflakes, import sorting,
+# bugbear, and pyupgrade checks.
+select = ["E", "F", "I", "B", "UP", "TID251", "D202"]
+# Formatter handles line-length and trailing commas.
+ignore = ["E501", "COM812"]
+
+# Auto-fix
+fixable = ["ALL"]
+unfixable = []
+
+# Imports
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"__future__.annotations".msg = "Disallowed by project policy (Python 3.11+): use string annotations or typing.TYPE_CHECKING for forward references."
+
+[tool.ruff.lint.isort]
+known-first-party = ["vexrag"]
+
+# Formatting
+[tool.ruff.format]
+# Use double quotes
+quote-style = "double"
+# Use spaces for indentation
+indent-style = "space"
+# Line endings for formatting
+line-ending = "auto"

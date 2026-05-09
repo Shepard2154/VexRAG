@@ -1,0 +1,1 @@
+Retrieval Augmented Generation (RAG) is a hybrid AI approach that combines neural language models with secure retrieval systems.

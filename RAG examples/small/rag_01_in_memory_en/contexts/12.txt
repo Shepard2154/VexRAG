@@ -1,0 +1,1 @@
+Oracle AI Vector Search supports various distance metrics and indexing methods tailored for high-performance corporate workloads.
