@@ -70,7 +70,24 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Print debug logs and raw judge responses.",
     )
+    scan.add_argument(
+        "--detailed",
+        action="store_true",
+        help="Print per-case details instead of compact summary output.",
+    )
     scan.set_defaults(handler=_run_scan)
+
+    doctor = subcommands.add_parser(
+        "doctor",
+        help="Run environment and config preflight checks.",
+    )
+    _add_config_argument(doctor)
+    doctor.add_argument(
+        "--debug",
+        action="store_true",
+        help="Print debug logs.",
+    )
+    doctor.set_defaults(handler=_run_doctor)
 
     generate_cases = subcommands.add_parser(
         "generate-cases",
@@ -173,7 +190,7 @@ def _run_scan(args: argparse.Namespace) -> int:
     if requests:
         LOGGER.info("Loaded %d scan case(s)", len(requests))
     LOGGER.info("Running scan")
-    stream_cases = not args.quiet
+    stream_cases = not args.quiet and args.detailed
     if stream_cases:
         print("VexRAG Scan", flush=True)
         print(flush=True)
@@ -205,7 +222,46 @@ def _run_scan(args: argparse.Namespace) -> int:
         report,
         show_raw_responses=args.debug,
         cases_emitted_during_run=stream_cases,
+        compact=not args.detailed,
     )
+    return 0
+
+
+def _run_doctor(args: argparse.Namespace) -> int:
+    _configure_logging(quiet=False, debug=args.debug)
+    LOGGER.info("Loading doctor config: %s", args.config)
+    config = _load_config(args.config)
+    checks: tuple[tuple[str, Any], ...] = (
+        ("target API availability", lambda: _preflight_target_system(config)),
+        ("Ollama endpoint + required models", lambda: _preflight_ollama_models(config)),
+        (
+            "scan config validity",
+            lambda: build_scan_command(config, base_dir=args.config.parent),
+        ),
+    )
+    results: list[tuple[str, bool, str | None]] = []
+    for name, check in checks:
+        try:
+            check()
+        except (ScanConfigError, CLIConfigError, ValueError, RuntimeError) as exc:
+            results.append((name, False, str(exc)))
+        else:
+            results.append((name, True, None))
+
+    print("VexRAG Doctor")
+    print()
+    for name, ok, error in results:
+        icon = "OK" if ok else "FAIL"
+        print(f"[{icon}] {name}")
+        if error:
+            print(f"  -> {error}")
+
+    failed = [name for name, ok, _ in results if not ok]
+    print()
+    if failed:
+        print(f"Doctor verdict: FAIL ({len(failed)} check(s) failed)")
+        return 1
+    print("Doctor verdict: PASS")
     return 0
 
 
@@ -371,6 +427,7 @@ def _print_report(
     *,
     show_raw_responses: bool = False,
     cases_emitted_during_run: bool = False,
+    compact: bool = True,
 ) -> None:
     if not cases_emitted_during_run:
         print("VexRAG Scan")
@@ -383,10 +440,13 @@ def _print_report(
         print()
     elif cases_emitted_during_run:
         print()
-    _print_report_summary(report, verdict_label="Verdict", asr_label="Success rate")
-    print(f"Cases: {report.total_cases}")
+    if compact:
+        _print_report_summary(report, verdict_label="Verdict", asr_label="ASR")
+    else:
+        _print_report_summary(report, verdict_label="Verdict", asr_label="Success rate")
+        print(f"Cases: {report.total_cases}")
     print()
-    if not cases_emitted_during_run:
+    if not compact and not cases_emitted_during_run:
         _print_case_details(report.cases, show_raw_responses=show_raw_responses)
 
     warnings = _collect_warnings(report)
@@ -397,6 +457,8 @@ def _print_report(
             print(f"- {warning}")
 
     print()
+    if compact:
+        print(f"Cases: {report.total_cases}")
     _print_report_summary(report, verdict_label="Final verdict", asr_label="ASR")
 
 

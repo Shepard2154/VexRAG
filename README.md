@@ -8,7 +8,23 @@ A toolkit for assessing the **functional correctness** of retrieval-augmented ge
 
 ## Quickstart
 
-### 1) Install
+### Prerequisites
+
+```bash
+python --version  # requires 3.11+
+ollama list
+```
+
+Install/pull required Ollama models:
+
+```bash
+ollama pull llama3:8b
+ollama pull nomic-embed-text:latest
+```
+
+You also need a running target API endpoint (for the small example: `http://localhost:8080`).
+
+### 1) Install VexRAG
 
 ```bash
 pip install vexrag
@@ -36,16 +52,21 @@ vx scan --config path/to/scan.yml
 
 Use sample configs from `RAG examples/` as a starting point.
 
-### 4) Quick end-to-end check with local example
+### 4) First successful scan (small local example)
 
 From `RAG examples/small/rag_01_in_memory_en`:
 
 ```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 python small_rag.py
 vx scan --config scan_configs_examples/vexrag-chain-hijack-then-poisoned-semantic-ollama-nomic.yaml
 ```
 
-The target API must be running on `http://localhost:8080` before `vx scan`.
+Expected outcome:
+- `small_rag.py` serves the target API on `http://localhost:8080`.
+- `vx scan` completes and prints a scan report with attack/evaluation results (no connection/preflight errors).
 
 ## Project roadmap
 

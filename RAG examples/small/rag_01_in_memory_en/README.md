@@ -8,6 +8,19 @@ Retrieval passages are adapted from the **`db_records`** list used in *RAG-Drive
 
 ## Quick Start
 
+### Prerequisites
+
+- Python 3.11+
+- Ollama running on `http://localhost:11434`
+- Required models:
+
+```bash
+ollama pull llama3:8b
+ollama pull nomic-embed-text:latest
+```
+
+### First successful run
+
 From `RAG examples/small/rag_01_in_memory_en`:
 
 ```bash
@@ -15,10 +28,15 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 python3 small_rag.py
+vx scan --config scan_configs_examples/vexrag-chain-hijack-then-poisoned-semantic-ollama-nomic.yaml
 ```
 
 Default service URL: `http://localhost:8080`  
 Answer endpoint: `POST /model/context-based-response` — response includes `answer` and `contexts` (retrieved passages).
+
+Expected outcome:
+- `python3 small_rag.py` starts the local target API on port `8080`.
+- `vx scan` finishes with a generated report and without missing-model or connectivity errors.
 
 ## Docker Run
 
