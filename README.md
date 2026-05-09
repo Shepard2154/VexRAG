@@ -4,6 +4,9 @@
 
 A toolkit for assessing the **functional correctness** of retrieval-augmented generation (RAG) systems under attack conditions.
 
+> **Stability notice (pre-0.2.0):** VexRAG is currently test-stage software and is **not production-ready**.
+> Until version `0.2.0`, backward compatibility is **not guaranteed** and updates may include **breaking changes**.
+
 **Sample RAG stacks** for getting started: [RAG examples](RAG%20examples/README.md).
 
 ## Quickstart

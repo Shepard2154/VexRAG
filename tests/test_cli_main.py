@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import pytest
+
 from vexrag.cli import main as cli_main
 
 
@@ -128,3 +130,20 @@ def test_scan_detailed_prints_case_details(monkeypatch, capsys) -> None:
     captured = capsys.readouterr()
     assert status == 0
     assert "Case details:" in captured.out
+
+
+def test_version_flag_prints_and_exits_zero(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(cli_main, "_distribution_version", lambda: "0.0.0-test")
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main.main(["--version"])
+    assert exc_info.value.code == 0
+    out = capsys.readouterr().out
+    assert "VexRAG 0.0.0-test" in out
+
+
+def test_short_version_flag_prints_and_exits_zero(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(cli_main, "_distribution_version", lambda: "0.0.0-test")
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main.main(["-V"])
+    assert exc_info.value.code == 0
+    assert "VexRAG 0.0.0-test" in capsys.readouterr().out

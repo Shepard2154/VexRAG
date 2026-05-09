@@ -3,6 +3,7 @@ import json
 import logging
 import socket
 import sys
+import tomllib
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -37,6 +38,23 @@ FIELD_TEXT_LIMIT = 2_000
 CONTEXT_TEXT_LIMIT = 4_000
 
 
+def _distribution_version() -> str:
+    """Installed wheel/sdist version, or ``pyproject.toml`` when running from a checkout."""
+    try:
+        from importlib.metadata import PackageNotFoundError, version
+
+        return version("vexrag")
+    except PackageNotFoundError:
+        pass
+    try:
+        repo_root = Path(__file__).resolve().parents[2]
+        pyproject = repo_root / "pyproject.toml"
+        data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+        return str(data["project"]["version"])
+    except (KeyError, OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return "0.0.0+unknown"
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
@@ -51,6 +69,12 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="vx",
         description="VexRAG command-line scanner.",
+    )
+    parser.add_argument(
+        "-V",
+        "--version",
+        action="version",
+        version=f"VexRAG {_distribution_version()}",
     )
     subcommands = parser.add_subparsers(dest="command", required=True)
 
