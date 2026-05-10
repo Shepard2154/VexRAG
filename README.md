@@ -73,28 +73,19 @@ Expected outcome:
 
 ## Project roadmap
 
-Canonical checklist: [notes/TODO.md](notes/TODO.md).
-
 ## Done
-- [x] Small RAG (in-memory)
-- [x] PoisonedRAG target scan pipeline with core target, scan, and evaluation contracts
-- [x] PoisonedRAG CLI scan flow wired from YAML config with multi-context poisoning runs
-- [x] Core package facade exports clarified for shared APIs
-- [x] StackOverflow XML/TSV to Qdrant ingestion scripts for large dataset indexing
-- [x] PoisonedRAG generation improvements: poisoning styles, corpusN payloads, and query-prefixed adversarial outputs
-- [x] Automatic attack case generation and consolidated example scan configs
-- [x] HijackRAG attack support with CLI `generate-cases`
-- [x] vLLM target/provider support for scan execution
-- [x] Core modularization for config/retrieval/runtime
+- [x] Implementation of PoisonedRAG (**arXiv:** [2402.07867](https://arxiv.org/abs/2402.07867))
+- [x] Implementation of HijackRAG (**arXiv:** [2410.22832](https://arxiv.org/abs/2410.22832))
+- [x] Automatic generation of attack cases for both methods
+- [x] Support for vLLM and Ollama
+- [x] Simple RAG examples for quick onboarding to VexRAG
+- [x] Support for Qdrant, FAISS, Chroma, and file-based retrieval backends
 
 ## In Progress
-- [ ] PoisonedRAG hardening: broaden scenario coverage, stabilize metrics, and add end-to-end validation runs
-- [ ] Medium RAG examples stabilization across vector DB backends and multi-attack eval flow
-
-## Next
-- [ ] Finalize full end-to-end runnable demo for the huge StackOverflow + Qdrant pipeline
-- [ ] Promote selected `wip` milestones to stable feature/documented workflow status
+- [ ] Codebase hardening: refactors, typing, tooling 
 
 ## Ideas / Backlog
-- [ ] Red-team testing methods for API-interacting RAG services (local RAG targets)
-- [ ] Red-team testing methods for the VexRAG CLI (local RAG targets)
+- [ ] Expand red-team methods in VexRAG
+- [ ] Expand supported retrieval backends
+- [ ] Implement a web version of VexRAG
+
