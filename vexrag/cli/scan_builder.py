@@ -2,25 +2,20 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from vexrag.attack_algorithms.hijackrag.plugin import HIJACK_PLUGIN
+from vexrag.attack_algorithms.poisonedrag.plugin import POISON_PLUGIN
 from vexrag.core.attack_plan import (
     materialize_config_for_attack_id,
     materialize_step_config,
     parse_attack_steps,
-)
-from vexrag.core.attacks import (
-    default_attack_registry,
-    ensure_builtin_attacks_registered,
+    resolve_generate_cases_attack_id,
 )
 from vexrag.core.attacks.chain_command import AttackChainScanCommand
 from vexrag.core.attacks.command import (
-    ConfiguredScanCommand,
     ScanCommandProtocol,
 )
+from vexrag.core.attacks.registry import AttackRegistry
 from vexrag.core.config import ScanConfigError
-from vexrag.core.config.build import (
-    build_corpus_poisoner,
-    build_target_system,
-)
 from vexrag.core.config.build import (
     build_evaluation_strategy as assemble_evaluation_strategy,
 )
@@ -35,8 +30,9 @@ def build_scan_command(
     base_dir: Path | None = None,
     attack: str | None = None,
 ) -> ScanCommandProtocol:
-    ensure_builtin_attacks_registered()
-    registry = default_attack_registry()
+    registry = AttackRegistry()
+    registry.register(HIJACK_PLUGIN)
+    registry.register(POISON_PLUGIN)
     steps = parse_attack_steps(config, registry)
     if attack is not None:
         aid = str(attack).strip().lower()
@@ -77,8 +73,10 @@ def build_scan_command(
 
 
 def resolve_attack_method(config: Mapping[str, Any]) -> str:
-    ensure_builtin_attacks_registered()
-    steps = parse_attack_steps(config, default_attack_registry())
+    registry = AttackRegistry()
+    registry.register(HIJACK_PLUGIN)
+    registry.register(POISON_PLUGIN)
+    steps = parse_attack_steps(config, registry)
     return ",".join(step.attack_id for step in steps)
 
 
@@ -87,10 +85,9 @@ def resolve_generate_cases_attack(
     *,
     explicit: str | None,
 ) -> str:
-    ensure_builtin_attacks_registered()
-    registry = default_attack_registry()
-    from vexrag.core.attack_plan import resolve_generate_cases_attack_id
-
+    registry = AttackRegistry()
+    registry.register(HIJACK_PLUGIN)
+    registry.register(POISON_PLUGIN)
     return resolve_generate_cases_attack_id(config, registry, explicit=explicit)
 
 
@@ -99,8 +96,9 @@ def build_evaluation_strategy(
     *,
     attack: str | None = None,
 ) -> Any:
-    ensure_builtin_attacks_registered()
-    registry = default_attack_registry()
+    registry = AttackRegistry()
+    registry.register(HIJACK_PLUGIN)
+    registry.register(POISON_PLUGIN)
     steps = parse_attack_steps(config, registry)
     if attack is not None:
         aid = str(attack).strip().lower()
@@ -130,19 +128,7 @@ def materialize_generate_cases_config(
     attack_id: str,
 ) -> dict[str, Any]:
     """Return a single-attack config for ``generate_cases`` / plugin generators."""
-    ensure_builtin_attacks_registered()
-    registry = default_attack_registry()
+    registry = AttackRegistry()
+    registry.register(HIJACK_PLUGIN)
+    registry.register(POISON_PLUGIN)
     return materialize_config_for_attack_id(config, attack_id, registry=registry)
-
-
-__all__ = [
-    "ConfiguredScanCommand",
-    "ScanCommand",
-    "build_corpus_poisoner",
-    "build_evaluation_strategy",
-    "build_scan_command",
-    "build_target_system",
-    "materialize_generate_cases_config",
-    "resolve_attack_method",
-    "resolve_generate_cases_attack",
-]

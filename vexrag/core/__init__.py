@@ -39,7 +39,6 @@ from vexrag.core.retrieval import (
     QdrantPoisoner,
     RetrievalBackend,
 )
-from vexrag.core.runtime import VexRAGRuntime, create_runtime
 from vexrag.core.target import (
     HTTPResponsePaths,
     HTTPTargetSystemAdapter,
@@ -84,9 +83,6 @@ __all__ = [
     "ProviderServiceError",
     "build_embedding_client",
     "build_judge_client",
-    # Programmatic runtime
-    "VexRAGRuntime",
-    "create_runtime",
     # Corpus poisoning
     "ChromaPoisoner",
     "FaissPoisoner",

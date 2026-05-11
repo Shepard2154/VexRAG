@@ -1,5 +1,3 @@
-"""Smoke test for the shared adversarial probe (stable API surface)."""
-
 from typing import Any
 
 from vexrag.core.adversarial_probe import probe_with_poisoning_and_evaluation
