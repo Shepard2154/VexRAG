@@ -3,6 +3,7 @@ from vexrag.attack_algorithms.hijackrag.case_generator import (
 )
 from vexrag.attack_algorithms.hijackrag.evaluation import HijackRAGJudgePromptBuilder
 from vexrag.attack_algorithms.hijackrag.generator import HijackRAGGenerator
+from vexrag.attack_algorithms.hijackrag.plugin import HIJACK_PLUGIN
 from vexrag.attack_algorithms.hijackrag.report import (
     HijackRAGCaseResult,
     HijackRAGScanReport,
@@ -24,6 +25,7 @@ from vexrag.attack_algorithms.hijackrag.segments import (
 )
 
 __all__ = [
+    "HIJACK_PLUGIN",
     # Evaluation
     "HijackRAGJudgePromptBuilder",
     # Case generation

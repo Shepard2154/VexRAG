@@ -11,25 +11,24 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
+from vexrag.attack_algorithms.hijackrag.plugin import HIJACK_PLUGIN
+from vexrag.attack_algorithms.poisonedrag.plugin import POISON_PLUGIN
 from vexrag.cli.errors import CLIConfigError
 from vexrag.cli.scan_builder import (
     build_scan_command,
     materialize_generate_cases_config,
     resolve_generate_cases_attack,
 )
+from vexrag.core.attacks import GenerateCasesParams
 from vexrag.core.attacks.chain_command import (
     AttackChainScanReport,
     format_chain_step_summary_lines,
-)
-from vexrag.core.attacks import (
-    GenerateCasesParams,
-    default_attack_registry,
-    ensure_builtin_attacks_registered,
 )
 from vexrag.core.attacks.command import (
     ScanCaseReportProtocol,
     ScanReportProtocol,
 )
+from vexrag.core.attacks.registry import AttackRegistry
 from vexrag.core.config import ScanConfigError
 from vexrag.core.config.merge import deep_merge_mappings
 
@@ -118,8 +117,10 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Generate PoisonedRAG or HijackRAG cases YAML via the scan config LLM.",
     )
     _add_config_argument(generate_cases)
-    ensure_builtin_attacks_registered()
-    generate_cases_attack_choices = ("auto", *default_attack_registry().ids())
+    registry = AttackRegistry()
+    registry.register(HIJACK_PLUGIN)
+    registry.register(POISON_PLUGIN)
+    generate_cases_attack_choices = ("auto", *registry.ids())
     generate_cases.add_argument(
         "--attack",
         choices=generate_cases_attack_choices,
@@ -127,7 +128,7 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="NAME",
         help=(
             "Registered attack id or auto (only when the YAML has a single attacks step). "
-            f"Built-in ids: {', '.join(default_attack_registry().ids())}."
+            f"Built-in ids: {', '.join(registry.ids())}."
         ),
     )
     generate_cases.add_argument(
@@ -304,7 +305,9 @@ def _run_generate_cases(args: argparse.Namespace) -> int:
             f"output file already exists: {output_path}. Use --overwrite to replace it."
         )
 
-    registry = default_attack_registry()
+    registry = AttackRegistry()
+    registry.register(HIJACK_PLUGIN)
+    registry.register(POISON_PLUGIN)
     plugin = registry.get(attack_kind)
     adv = max(1, int(args.adv_per_query))
     params = GenerateCasesParams(
@@ -524,7 +527,9 @@ def _preflight_ollama_models(config: Mapping[str, Any]) -> None:
         if not models:
             continue
         available = _fetch_ollama_models(base_url)
-        missing = sorted(model for model in models if not _model_available(model, available))
+        missing = sorted(
+            model for model in models if not _model_available(model, available)
+        )
         if missing:
             raise CLIConfigError(
                 "ollama model(s) not available at "
@@ -652,7 +657,9 @@ def _print_single_case_detail(
         case.adversarial_texts,
     )
     print(flush=True)
-    print(f"  Case {case_index}: {label} (run {case.run_index}) - {verdict}", flush=True)
+    print(
+        f"  Case {case_index}: {label} (run {case.run_index}) - {verdict}", flush=True
+    )
     _print_case_statistics(
         evaluation=case.evaluation,
         contexts=case.system_response.contexts,

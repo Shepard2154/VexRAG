@@ -73,7 +73,7 @@ Expected outcome:
 
 ## Project roadmap
 
-## Done
+### Done
 - [x] Implementation of PoisonedRAG (**arXiv:** [2402.07867](https://arxiv.org/abs/2402.07867))
 - [x] Implementation of HijackRAG (**arXiv:** [2410.22832](https://arxiv.org/abs/2410.22832))
 - [x] Automatic generation of attack cases for both methods
@@ -81,10 +81,10 @@ Expected outcome:
 - [x] Simple RAG examples for quick onboarding to VexRAG
 - [x] Support for Qdrant, FAISS, Chroma, and file-based retrieval backends
 
-## In Progress
-- [ ] Codebase hardening: refactors, typing, tooling 
+### In Progress
+- [ ] Codebase hardening: refactors, typing, tooling, *removing AI slop*
 
-## Ideas / Backlog
+### Ideas / Backlog
 - [ ] Expand red-team methods in VexRAG
 - [ ] Expand supported retrieval backends
 - [ ] Implement a web version of VexRAG

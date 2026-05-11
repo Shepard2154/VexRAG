@@ -2,11 +2,13 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from vexrag.attack_algorithms.poisonedrag import (
+from vexrag.attack_algorithms.poisonedrag.case_generator import (
     AutomaticPoisonedRAGCaseGenerator,
-    PoisonedRAGGenerator,
+)
+from vexrag.attack_algorithms.poisonedrag.evaluation import (
     PoisonedRAGJudgePromptBuilder,
 )
+from vexrag.attack_algorithms.poisonedrag.generator import PoisonedRAGGenerator
 from vexrag.attack_algorithms.poisonedrag.scan import (
     PoisonedRAGScanConfig,
     PoisonedRAGScanRunner,
@@ -14,7 +16,7 @@ from vexrag.attack_algorithms.poisonedrag.scan import (
 from vexrag.attack_algorithms.poisonedrag.schema import PoisonedRAGRequest
 from vexrag.core.attacks.command import ConfiguredScanCommand
 from vexrag.core.attacks.plugin import AttackPlugin, GenerateCasesParams
-from vexrag.core.attacks.registry import AttackRegistry, default_attack_registry
+from vexrag.core.attacks.registry import AttackRegistry
 from vexrag.core.config import ScanConfigError
 from vexrag.core.config.build import (
     attack_llm_client_section,
@@ -41,11 +43,6 @@ from vexrag.core.json_generation_client import JSONGenerationLLMClientAdapter
 from vexrag.core.providers import build_judge_client as build_provider_judge_client
 from vexrag.core.target import HTTPTargetSystemAdapter
 from vexrag.core.target_correct_answer import TargetCorrectAnswerProvider
-
-
-def register(registry: AttackRegistry | None = None) -> None:
-    reg = registry if registry is not None else default_attack_registry()
-    reg.register(POISON_PLUGIN)
 
 
 def _build_poison_llm_client(
@@ -192,7 +189,7 @@ def _build_scan_command(
     config: Mapping[str, Any],
     base_dir: Path | None = None,
 ) -> ConfiguredScanCommand:
-    registry = default_attack_registry()
+    registry = AttackRegistry().register(POISON_PLUGIN)
     target_system = build_target_system(config)
     generator = build_poisonedrag_generator(config, target_system=target_system)
     evaluation_strategy = build_evaluation_strategy(
