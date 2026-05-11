@@ -3,9 +3,13 @@
 from collections.abc import Mapping
 from typing import Any
 
-from vexrag.core.attacks import (
-    default_attack_registry,
-    ensure_builtin_attacks_registered,
+from vexrag.attack_algorithms.hijackrag.plugin import HIJACK_PLUGIN
+from vexrag.attack_algorithms.poisonedrag.plugin import POISON_PLUGIN
+from vexrag.core.attacks.registry import AttackRegistry
+from vexrag.core.config.build import (
+    attack_llm_client_section,
+    attack_section,
+    build_evaluation_strategy,
 )
 from vexrag.core.evaluation.llm_judge import LLMJudgeEvaluator
 from vexrag.core.evaluation.multi import MultiEvaluator
@@ -15,11 +19,6 @@ from vexrag.core.evaluation.protocols import (
 )
 from vexrag.core.providers import build_judge_client as build_provider_judge_client
 from vexrag.core.providers.errors import ProviderServiceError
-from vexrag.core.config.build import (
-    attack_llm_client_section,
-    attack_section,
-    build_evaluation_strategy,
-)
 
 _SCAN_LLM_PROBE_PROMPT = (
     'Return only a JSON object, no other text: {"vexrag_probe":"ok"}'
@@ -30,9 +29,7 @@ def _probe_complete_json(client: JudgeLLMProtocol, *, role: str) -> None:
     try:
         client.complete_json(_SCAN_LLM_PROBE_PROMPT)
     except Exception as exc:
-        raise ProviderServiceError(
-            f"LLM unavailable for scan ({role}): {exc}"
-        ) from exc
+        raise ProviderServiceError(f"LLM unavailable for scan ({role}): {exc}") from exc
 
 
 def _probe_llm_judge_evaluators(
@@ -64,8 +61,10 @@ def probe_scan_llms_for_materialized_config(
     attack_client = build_provider_judge_client(llm_cfg)
     _probe_complete_json(attack_client, role=f"{label} — generator")
 
-    ensure_builtin_attacks_registered()
-    registry = default_attack_registry()
+    registry = AttackRegistry()
+    registry.register(HIJACK_PLUGIN)
+    registry.register(POISON_PLUGIN)
+
     evaluation = build_evaluation_strategy(
         config,
         attack_id=attack_id,

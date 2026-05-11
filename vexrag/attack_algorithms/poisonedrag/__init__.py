@@ -6,11 +6,11 @@ from vexrag.attack_algorithms.poisonedrag.evaluation import (
     PoisonedRAGJudgePromptBuilder,
 )
 from vexrag.attack_algorithms.poisonedrag.generator import PoisonedRAGGenerator
+from vexrag.attack_algorithms.poisonedrag.plugin import POISON_PLUGIN
 from vexrag.attack_algorithms.poisonedrag.prompts import (
     PROMPT_VERSION,
     build_poison_candidates_prompt,
 )
-from vexrag.core.correct_answer_prompt import build_correct_answer_prompt
 from vexrag.attack_algorithms.poisonedrag.report import (
     PoisonedRAGCaseResult,
     PoisonedRAGScanReport,
@@ -29,8 +29,10 @@ from vexrag.attack_algorithms.poisonedrag.schema import (
 )
 from vexrag.attack_algorithms.poisonedrag.validators import PoisonedRAGValidationError
 from vexrag.core.contracts import CorrectAnswerProviderProtocol, LLMClientProtocol
+from vexrag.core.correct_answer_prompt import build_correct_answer_prompt
 
 __all__ = [
+    "POISON_PLUGIN",
     # Evaluation
     "PoisonedRAGJudgePromptBuilder",
     "AutomaticCaseGenerationError",

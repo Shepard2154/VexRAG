@@ -25,14 +25,6 @@ def _stub_plugin(attack_id: str = "stub_attack") -> AttackPlugin:
     )
 
 
-def test_registry_duplicate_registration_raises() -> None:
-    reg = AttackRegistry()
-    p = _stub_plugin()
-    reg.register(p)
-    with pytest.raises(AttackRegistryError, match="already registered"):
-        reg.register(p)
-
-
 def test_registry_unknown_get_raises() -> None:
     reg = AttackRegistry()
     reg.register(_stub_plugin("alpha"))

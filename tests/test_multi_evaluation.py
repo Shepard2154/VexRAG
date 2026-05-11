@@ -1,5 +1,10 @@
 import pytest
 
+from vexrag.attack_algorithms.hijackrag.plugin import HIJACK_PLUGIN
+from vexrag.attack_algorithms.poisonedrag.plugin import POISON_PLUGIN
+from vexrag.core.attacks.registry import AttackRegistry
+from vexrag.core.config import EvaluationConfigError
+from vexrag.core.config.build import build_evaluation_strategy
 from vexrag.core.evaluation.multi import MultiEvaluator
 from vexrag.core.evaluation.protocols import EvaluationInput, EvaluationResult
 
@@ -69,33 +74,24 @@ def test_multi_empty_raises() -> None:
 
 
 def test_build_evaluation_strategy_rejects_both_evaluation_keys() -> None:
-    from vexrag.core.attacks import (
-        default_attack_registry,
-        ensure_builtin_attacks_registered,
-    )
-    from vexrag.core.config import EvaluationConfigError
-    from vexrag.core.config.build import build_evaluation_strategy
-
-    ensure_builtin_attacks_registered()
-    reg = default_attack_registry()
+    reg = AttackRegistry()
+    reg.register(HIJACK_PLUGIN)
+    reg.register(POISON_PLUGIN)
     cfg = {
         "evaluation": {"strategy": "semantic_similarity"},
-        "evaluations": {"combine": "any", "evaluators": [{"strategy": "semantic_similarity"}]},
+        "evaluations": {
+            "combine": "any",
+            "evaluators": [{"strategy": "semantic_similarity"}],
+        },
     }
     with pytest.raises(EvaluationConfigError, match="not both"):
         build_evaluation_strategy(cfg, attack_id="hijackrag", registry=reg)
 
 
 def test_build_evaluation_strategy_evaluations_bundle() -> None:
-    from vexrag.core.attacks import (
-        default_attack_registry,
-        ensure_builtin_attacks_registered,
-    )
-    from vexrag.core.evaluation.multi import MultiEvaluator
-    from vexrag.core.config.build import build_evaluation_strategy
-
-    ensure_builtin_attacks_registered()
-    reg = default_attack_registry()
+    reg = AttackRegistry()
+    reg.register(HIJACK_PLUGIN)
+    reg.register(POISON_PLUGIN)
     emb = {
         "provider": "ollama",
         "base_url": "http://localhost:11434",
@@ -112,7 +108,11 @@ def test_build_evaluation_strategy_evaluations_bundle() -> None:
         "evaluations": {
             "combine": "all",
             "evaluators": [
-                {"strategy": "semantic_similarity", "embedding_client": emb, "semantic_similarity": sem},
+                {
+                    "strategy": "semantic_similarity",
+                    "embedding_client": emb,
+                    "semantic_similarity": sem,
+                },
                 {
                     "strategy": "semantic_similarity",
                     "embedding_client": emb,
