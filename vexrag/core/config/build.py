@@ -33,17 +33,7 @@ from vexrag.core.target import (
 )
 
 from .errors import EvaluationConfigError, ScanConfigError
-from .options import (
-    bool_option,
-    float_option,
-    int_option,
-    mapping_option,
-    optional_float_option,
-    optional_string,
-    path_option,
-    required_string,
-    string_mapping_option,
-)
+from .options import ConfigAccessor
 
 
 def attack_section(config: Mapping[str, Any], attack_name: str) -> Mapping[str, Any]:
@@ -65,35 +55,32 @@ def build_target_system(config: Mapping[str, Any]) -> HTTPTargetSystemAdapter:
     http_config = target_config.get("http", target_config)
     if not isinstance(http_config, Mapping):
         raise ScanConfigError("target_system.http must be a mapping")
+    http_config_accessor = ConfigAccessor(http_config, prefix="target_system.http")
 
     scan_raw = config.get("scan", {})
     include_raw_payload = False
     if isinstance(scan_raw, Mapping):
-        include_raw_payload = bool_option(
-            scan_raw,
+        scan_accessor = ConfigAccessor(scan_raw, prefix="scan")
+        include_raw_payload = scan_accessor.get_bool(
             "debug_include_raw_target_response",
             False,
         )
 
     return HTTPTargetSystemAdapter(
         HTTPTargetSystemAdapterConfig(
-            base_url=required_string(http_config, "base_url", "target_system"),
+            base_url=http_config_accessor.get_required_string("base_url"),
             route=str(http_config.get("route", "")).strip(),
             method=str(http_config.get("method", "POST")).strip(),
-            timeout=optional_float_option(http_config, "timeout", 10.0),
-            request_template=mapping_option(
-                http_config,
+            timeout=http_config_accessor.get_optional_float("timeout", 10.0),
+            request_template=http_config_accessor.get_mapping(
                 "request_template",
-                "target_system",
-                default={"query": "{query}", "contexts": "{contexts}"},
+                {"query": "{query}", "contexts": "{contexts}"},
             ),
-            response_paths=mapping_option(
-                http_config,
+            response_paths=http_config_accessor.get_mapping(
                 "response_paths",
-                "target_system",
-                default={"answer": "answer", "contexts": "contexts"},
+                {"answer": "answer", "contexts": "contexts"},
             ),
-            headers=string_mapping_option(http_config, "headers", "target_system"),
+            headers=http_config_accessor.get_string_mapping("headers"),
             include_raw_response_in_metadata=include_raw_payload,
         )
     )
@@ -114,6 +101,10 @@ def build_corpus_poisoner(
     if not isinstance(poison_config, Mapping):
         raise ScanConfigError("scan.corpus_poisoning must be a mapping")
 
+    poison_config_accessor = ConfigAccessor(
+        poison_config, prefix="scan.corpus_poisoning", base_dir=base_dir
+    )
+
     try:
         backend = RetrievalBackend(
             str(poison_config.get("backend", poison_config.get("type", "file_text")))
@@ -132,11 +123,8 @@ def build_corpus_poisoner(
         filename_prefix = prefix_raw.strip()
 
     if backend is RetrievalBackend.FILE_TEXT:
-        corpus_path = path_option(
-            backend_config,
-            ("path", "directory", "contexts_dir", "corpus_path"),
-            "scan.corpus_poisoning.file_text",
-            base_dir=base_dir,
+        corpus_path = poison_config_accessor.get_path(
+            "path", "directory", "contexts_dir", "corpus_path"
         )
         return FileTextPoisoner(
             path=corpus_path,
@@ -148,7 +136,7 @@ def build_corpus_poisoner(
         f"scan.corpus_poisoning.{backend.value}",
     )
     embedding_client = build_provider_embedding_client(embedding_section)
-    l2_normalize = bool_option(backend_config, "l2_normalize", False)
+    l2_normalize = poison_config_accessor.get_bool("l2_normalize", False)
 
     if backend is RetrievalBackend.QDRANT:
         return _build_qdrant_corpus_poisoner(
@@ -224,7 +212,10 @@ def _build_qdrant_corpus_poisoner(
     base_dir: Path | None,
 ) -> QdrantPoisoner:
     prefix = "scan.corpus_poisoning.qdrant"
-    url = optional_string(backend_cfg.get("url"))
+    qdrant_config_accessor = ConfigAccessor(
+        backend_cfg, prefix="scan.corpus_poisoning.qdrant"
+    )
+    url = qdrant_config_accessor.get_optional_string("url")
     path_str = backend_cfg.get("path")
     path: Path | None = None
     if isinstance(path_str, str) and path_str.strip():
@@ -236,9 +227,9 @@ def _build_qdrant_corpus_poisoner(
     if not url and not path:
         raise ScanConfigError(f"{prefix} must set url or path")
     collection = _vector_backend_collection_name(backend_cfg, prefix)
-    vector_name = optional_string(backend_cfg.get("vector_name"))
+    vector_name = qdrant_config_accessor.get_optional_string("vector_name")
     timeout = _optional_poison_timeout(backend_cfg, prefix)
-    api_key = optional_string(backend_cfg.get("api_key"))
+    api_key = qdrant_config_accessor.get_optional_string("api_key")
     return QdrantPoisoner(
         url=url,
         path=path,
@@ -259,8 +250,11 @@ def _build_chroma_corpus_poisoner(
     base_dir: Path | None,
 ) -> ChromaPoisoner:
     prefix = "scan.corpus_poisoning.chroma"
-    host = optional_string(backend_cfg.get("host"))
-    port = int_option(backend_cfg, "port", 8000)
+    chroma_config_accessor = ConfigAccessor(
+        backend_cfg, prefix="scan.corpus_poisoning.chroma"
+    )
+    host = chroma_config_accessor.get_optional_string("host")
+    port = chroma_config_accessor.get_optional_int("port", 8000)
     path_str = backend_cfg.get("persist_directory") or backend_cfg.get("path")
     persist_directory: Path | None = None
     if host:
@@ -295,7 +289,10 @@ def _build_faiss_corpus_poisoner(
     base_dir: Path | None,
 ) -> FaissPoisoner:
     prefix = "scan.corpus_poisoning.faiss"
-    faiss_dir = path_option(
+    faiss_config_accessor = ConfigAccessor(
+        backend_cfg, prefix="scan.corpus_poisoning.faiss"
+    )
+    faiss_dir = faiss_config_accessor.get_path(
         backend_cfg,
         ("directory", "path", "faiss_dir"),
         prefix,
@@ -416,23 +413,20 @@ def _build_semantic_similarity(
         evaluation_config,
         "embedding_client",
     )
+    strategy_config_accessor = ConfigAccessor(
+        strategy_config, prefix="evaluation.semantic_similarity"
+    )
     return SemanticSimilarityEvaluator(
         embedding_client=build_provider_embedding_client(embedding_config),
         metric=CosineSimilarityMetric(),
-        attack_similarity_threshold=float_option(
-            strategy_config,
-            "attack_similarity_threshold",
-            0.75,
+        attack_similarity_threshold=strategy_config_accessor.get_optional_float(
+            "attack_similarity_threshold", 0.75
         ),
-        max_reference_similarity=float_option(
-            strategy_config,
-            "max_reference_similarity",
-            0.6,
+        max_reference_similarity=strategy_config_accessor.get_optional_float(
+            "max_reference_similarity", 0.6
         ),
-        attack_margin_threshold=float_option(
-            strategy_config,
-            "attack_margin_threshold",
-            0.1,
+        attack_margin_threshold=strategy_config_accessor.get_optional_float(
+            "attack_margin_threshold", 0.1
         ),
     )
 
@@ -574,7 +568,10 @@ def cleanup_option(scan_config: Mapping[str, Any]) -> bool:
         return False
     if not isinstance(poison_config, Mapping):
         raise ScanConfigError("scan.corpus_poisoning must be a mapping")
-    return bool_option(poison_config, "cleanup", False)
+    poison_config_accessor = ConfigAccessor(
+        poison_config, prefix="scan.corpus_poisoning"
+    )
+    return poison_config_accessor.get_bool("cleanup", False)
 
 
 def path_strings_from_value(value: Any, prefix: str) -> tuple[str, ...]:
