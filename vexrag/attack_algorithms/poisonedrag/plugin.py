@@ -31,14 +31,7 @@ from vexrag.core.config.build import (
     poisoning_style_option,
     target_style_option,
 )
-from vexrag.core.config.options import (
-    bool_option,
-    float_option,
-    int_option,
-    optional_int,
-    optional_string,
-    required_string,
-)
+from vexrag.core.config.options import ConfigAccessor
 from vexrag.core.json_generation_client import JSONGenerationLLMClientAdapter
 from vexrag.core.providers import build_judge_client as build_provider_judge_client
 from vexrag.core.target import HTTPTargetSystemAdapter
@@ -112,18 +105,18 @@ def _build_poisonedrag_request(
     case_number: int,
 ) -> PoisonedRAGRequest:
     prefix = f"attack.poisonedrag.cases[{case_number}]"
+    case_config_accessor = ConfigAccessor(case_config, prefix=prefix)
+    attack_config_accessor = ConfigAccessor(attack_config, prefix="attack.poisonedrag")
     return PoisonedRAGRequest(
-        query=required_string(case_config, "query", prefix),
-        correct_answer=optional_string(case_config.get("correct_answer")),
-        target_incorrect_answer=optional_string(
-            case_config.get("target_incorrect_answer")
+        query=case_config_accessor.get_required_string("query"),
+        correct_answer=case_config_accessor.get_optional_string("correct_answer"),
+        target_incorrect_answer=case_config_accessor.get_optional_string(
+            "target_incorrect_answer"
         ),
-        case_id=optional_string(case_config.get("case_id", case_config.get("id"))),
-        adv_per_query=int_option(
-            case_config,
-            "adv_per_query",
-            int_option(attack_config, "adv_per_query", 3),
+        case_id=case_config_accessor.get_optional_string(
+            "case_id", case_config_accessor.get_optional_string("id")
         ),
+        adv_per_query=case_config_accessor.get_optional_int("adv_per_query", 3),
         target_style=target_style_option(
             case_config,
             default=target_style_option(attack_config),
@@ -134,9 +127,8 @@ def _build_poisonedrag_request(
             default=poisoning_style_option(attack_config),
             prefix=prefix,
         ),
-        seed=optional_int(
-            case_config.get("seed", attack_config.get("seed")),
-            f"{prefix}.seed",
+        seed=case_config_accessor.get_optional_int(
+            "seed", attack_config_accessor.get_optional_int("seed")
         ),
     )
 
@@ -173,14 +165,13 @@ def build_poisonedrag_scan_config(config: Mapping[str, Any]) -> PoisonedRAGScanC
     scan_config = config.get("scan", {})
     if not isinstance(scan_config, Mapping):
         raise ScanConfigError("scan must be a mapping")
+    scan_config_accessor = ConfigAccessor(scan_config, prefix="scan")
     return PoisonedRAGScanConfig(
-        repetitions=int_option(scan_config, "repetitions", 1),
-        attack_success_rate_threshold=float_option(
-            scan_config,
-            "attack_success_rate_threshold",
-            0.0,
+        repetitions=scan_config_accessor.get_optional_int("repetitions", 1),
+        attack_success_rate_threshold=scan_config_accessor.get_optional_float(
+            "attack_success_rate_threshold", 0.0
         ),
-        override_contexts=bool_option(scan_config, "override_contexts", False),
+        override_contexts=scan_config_accessor.get_bool("override_contexts", False),
         cleanup=cleanup_option(scan_config),
     )
 
@@ -189,7 +180,8 @@ def _build_scan_command(
     config: Mapping[str, Any],
     base_dir: Path | None = None,
 ) -> ConfiguredScanCommand:
-    registry = AttackRegistry().register(POISON_PLUGIN)
+    registry = AttackRegistry()
+    registry.register(POISON_PLUGIN)
     target_system = build_target_system(config)
     generator = build_poisonedrag_generator(config, target_system=target_system)
     evaluation_strategy = build_evaluation_strategy(

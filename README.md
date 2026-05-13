@@ -1,6 +1,7 @@
 # VexRAG
 
 ![Project: in development](https://img.shields.io/badge/project-in%20development-F59E0B?style=for-the-badge)
+[![PyPI Downloads](https://static.pepy.tech/personalized-badge/vexrag?period=total&units=ABBREVIATION&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/vexrag)
 
 A toolkit for assessing the **functional correctness** of retrieval-augmented generation (RAG) systems under attack conditions.
 
