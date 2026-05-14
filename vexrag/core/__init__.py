@@ -1,7 +1,6 @@
 from vexrag.core.contracts import ScanVerdict, TargetStyle
 from vexrag.core.correct_answer_prompt import build_correct_answer_prompt
 from vexrag.core.evaluation import (
-    CosineSimilarityMetric,
     EmbeddingClientProtocol,
     EvaluationInput,
     EvaluationResult,
@@ -12,7 +11,6 @@ from vexrag.core.evaluation import (
     JudgeResponseValidationError,
     LLMJudgeEvaluator,
     SemanticSimilarityEvaluator,
-    SimilarityMetricProtocol,
     validate_judge_response,
 )
 from vexrag.core.llm_response_validation import (
@@ -65,14 +63,12 @@ __all__ = [
     "EvaluationStrategyProtocol",
     "JudgeLLMProtocol",
     "JudgePromptBuilderProtocol",
-    "SimilarityMetricProtocol",
     # LLM judge evaluation
     "JudgeResponse",
     "JudgeResponseValidationError",
     "LLMJudgeEvaluator",
     "validate_judge_response",
     # Semantic similarity evaluation
-    "CosineSimilarityMetric",
     "SemanticSimilarityEvaluator",
     # Providers
     "OllamaEmbeddingClient",

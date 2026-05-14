@@ -27,6 +27,7 @@ class JudgeResponseValidationError(ValueError):
 
 class LLMJudgeEvaluator:
     """Evaluates attack success with an LLM judge returning structured JSON."""
+
     strategy = "llm_judge"
 
     def __init__(

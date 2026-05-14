@@ -5,14 +5,14 @@ from typing import Any
 
 from vexrag.core.attacks.registry import AttackRegistry
 from vexrag.core.evaluation import (
-    CosineSimilarityMetric,
     EmbeddingClientProtocol,
+    EmbeddingSimilarityEvaluator,
     EvaluationStrategyProtocol,
     JudgePromptBuilderProtocol,
     LLMJudgeEvaluator,
-    SemanticSimilarityEvaluator,
 )
-from vexrag.core.evaluation.multi import MultiEvaluator
+from vexrag.core.evaluation.metrics.cosine_similarity import cosine_similarity
+from vexrag.core.evaluation.multi_evaluator import MultiEvaluator
 from vexrag.core.providers import (
     build_embedding_client as build_provider_embedding_client,
 )
@@ -402,7 +402,7 @@ def attack_llm_client_section(
 
 def _build_semantic_similarity(
     evaluation_config: Mapping[str, Any],
-) -> SemanticSimilarityEvaluator:
+) -> EmbeddingSimilarityEvaluator:
     strategy_config = _strategy_section(evaluation_config, "semantic_similarity")
     metric_name = str(strategy_config.get("metric", "cosine")).strip()
     if metric_name != "cosine":
@@ -416,9 +416,9 @@ def _build_semantic_similarity(
     strategy_config_accessor = ConfigAccessor(
         strategy_config, prefix="evaluation.semantic_similarity"
     )
-    return SemanticSimilarityEvaluator(
+    return EmbeddingSimilarityEvaluator(
         embedding_client=build_provider_embedding_client(embedding_config),
-        metric=CosineSimilarityMetric(),
+        metric=cosine_similarity,
         attack_similarity_threshold=strategy_config_accessor.get_optional_float(
             "attack_similarity_threshold", 0.75
         ),
