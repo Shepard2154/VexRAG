@@ -1,6 +1,6 @@
 from vexrag.core.contracts import TargetStyle
 
-PROMPT_VERSION = "poisonedrag-paper-adv-prompt"
+PROMPT_VERSION = "poisonedrag-paper-adv-v1"
 
 ADV_PROMPT = [
     (
