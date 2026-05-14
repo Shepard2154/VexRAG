@@ -111,13 +111,13 @@ class ConfigAccessor:
             raise ScanConfigError(f"{field_path} must be a mapping")
         return {str(name): str(item) for name, item in raw_value.items()}
 
-    def get_path(self, *keys: str) -> Path:
-        for key in keys:
+    def get_path(self, *option_names: str) -> Path:
+        for key in option_names:
             raw_value = self.config.get(key)
             if isinstance(raw_value, str) and raw_value.strip():
                 path = Path(raw_value.strip())
                 if not path.is_absolute() and self.base_dir is not None:
                     path = self.base_dir / path
                 return path
-        expected = ", ".join(keys)
+        expected = ", ".join(option_names)
         raise ScanConfigError(f"{self.prefix} must configure one of: {expected}")
