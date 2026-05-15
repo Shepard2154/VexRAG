@@ -3,7 +3,8 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from vexrag.core.evaluation import EmbeddingClientProtocol
+from vexrag.core.evaluation import EmbeddingClient
+
 from .._texts import nonempty_stripped_strs
 from ..contracts import CorpusPoisoningError
 from ..embeddings import embed_poison_vectors
@@ -61,7 +62,7 @@ class QdrantPoisoner:
         url: str | None,
         path: Path | None,
         collection: str,
-        embedding_client: EmbeddingClientProtocol,
+        embedding_client: EmbeddingClient,
         vector_name: str | None = None,
         timeout: float | None = None,
         api_key: str | None = None,

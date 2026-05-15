@@ -1,7 +1,7 @@
 from collections.abc import Mapping
 from typing import Any
 
-from vexrag.core.evaluation import EmbeddingClientProtocol, JudgeLLMProtocol
+from vexrag.core.evaluation import EmbeddingClient, JudgeClient
 from vexrag.core.providers.errors import ProviderConfigError, ProviderServiceError
 from vexrag.core.providers.ollama import (
     OllamaEmbeddingClient,
@@ -20,7 +20,7 @@ from vexrag.core.providers.vllm import (
 from vexrag.core.providers.vllm import build_judge_client as build_vllm_judge_client
 
 
-def build_embedding_client(config: Mapping[str, Any]) -> EmbeddingClientProtocol:
+def build_embedding_client(config: Mapping[str, Any]) -> EmbeddingClient:
     provider = _provider_name(config, "embedding_client")
     if provider == "ollama":
         return build_ollama_embedding_client(config)
@@ -29,7 +29,7 @@ def build_embedding_client(config: Mapping[str, Any]) -> EmbeddingClientProtocol
     raise ProviderConfigError(f"embedding_client.provider is not supported: {provider}")
 
 
-def build_judge_client(config: Mapping[str, Any]) -> JudgeLLMProtocol:
+def build_judge_client(config: Mapping[str, Any]) -> JudgeClient:
     provider = _provider_name(config, "judge_client")
     if provider == "ollama":
         return build_ollama_judge_client(config)

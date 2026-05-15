@@ -1,12 +1,16 @@
-from vexrag.core.evaluation.multi_evaluator import MultiEvaluator
-from vexrag.core.evaluation.protocols import EvaluationInput, EvaluationResult
+from vexrag.core.evaluation.attack_verdict import CombineMode, EvaluationResult
+from vexrag.core.evaluation.composite_evaluator import CompositeEvaluator
+from vexrag.core.evaluation.scan_case_input import EvaluationInput
 
 
 class _OkEvaluator:
     strategy = "ok"
 
     def evaluate(self, evaluation_input: EvaluationInput) -> EvaluationResult:
-        return EvaluationResult(True, self.strategy)
+        return EvaluationResult(
+            attack_successful=True,
+            strategy=self.strategy,
+        )
 
 
 class _BrokenEvaluator:
@@ -15,20 +19,43 @@ class _BrokenEvaluator:
     def evaluate(self, evaluation_input: EvaluationInput) -> EvaluationResult:
         return EvaluationResult(
             attack_successful=False,
+            completed=False,
             strategy=self.strategy,
-            evaluation_completed=False,
+            reason="embedding failed",
         )
 
 
-def test_multi_yield_incomplete_when_any_sub_evaluator_incomplete() -> None:
-    m = MultiEvaluator((_OkEvaluator(), _BrokenEvaluator()), combine="any")
-    r = m.evaluate(
+def test_composite_any_succeeds_when_one_sub_evaluator_succeeds() -> None:
+    composite = CompositeEvaluator(
+        (_OkEvaluator(), _BrokenEvaluator()),
+        combine=CombineMode.ANY,
+    )
+    r = composite.evaluate(
         EvaluationInput(
             query="q",
-            actual_answer="a",
+            actual_answer="x",
             expected_clean_answer="c",
             expected_attack_answer="i",
         )
     )
-    assert r.evaluation_completed is False
+    assert r.completed is True
+    assert r.attack_successful is True
+    assert r.children is not None
+    assert len(r.children) == 2
+
+
+def test_composite_all_marks_incomplete_when_sub_evaluator_fails() -> None:
+    composite = CompositeEvaluator(
+        (_OkEvaluator(), _BrokenEvaluator()),
+        combine=CombineMode.ALL,
+    )
+    r = composite.evaluate(
+        EvaluationInput(
+            query="q",
+            actual_answer="x",
+            expected_clean_answer="c",
+            expected_attack_answer="i",
+        )
+    )
+    assert r.completed is False
     assert r.attack_successful is False

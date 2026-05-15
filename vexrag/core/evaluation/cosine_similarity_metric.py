@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from math import sqrt
 
-from vexrag.core.evaluation.metrics.errors import (
+from vexrag.core.evaluation.errors import (
     EmbeddingDimensionMismatchError,
     EmptyEmbeddingVectorError,
     ZeroNormEmbeddingError,

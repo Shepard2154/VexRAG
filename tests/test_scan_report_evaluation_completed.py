@@ -11,7 +11,7 @@ from vexrag.core.target import TargetSystemResponse
 
 def _case(
     *,
-    evaluation_completed: bool,
+    completed: bool,
     attack_successful: bool,
 ) -> HijackRAGCaseResult:
     return HijackRAGCaseResult(
@@ -22,15 +22,15 @@ def _case(
         evaluation=EvaluationResult(
             attack_successful=attack_successful,
             strategy="stub",
-            evaluation_completed=evaluation_completed,
+            completed=completed,
         ),
     )
 
 
 def test_hijack_report_success_rate_denominator_counts_evaluated_only() -> None:
     cases = (
-        _case(evaluation_completed=True, attack_successful=True),
-        _case(evaluation_completed=False, attack_successful=False),
+        _case(completed=True, attack_successful=True),
+        _case(completed=False, attack_successful=False),
     )
     report = HijackRAGScanReport(
         verdict=ScanVerdict.NOT_VULNERABLE,

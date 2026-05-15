@@ -3,7 +3,8 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from vexrag.core.evaluation import EmbeddingClientProtocol
+from vexrag.core.evaluation import EmbeddingClient
+
 from .._texts import nonempty_stripped_strs
 from ..contracts import CorpusPoisoningError
 from ..embeddings import embed_poison_vectors
@@ -18,9 +19,7 @@ def _ordered_ids_from_metadata(raw_meta: Mapping[str, Any]) -> list[int]:
         try:
             ordered_ids.append(int(item))
         except (TypeError, ValueError) as exc:
-            raise CorpusPoisoningError(
-                "metadata ordered_ids must be integers"
-            ) from exc
+            raise CorpusPoisoningError("metadata ordered_ids must be integers") from exc
     return ordered_ids
 
 
@@ -116,7 +115,7 @@ class FaissPoisoner:
     def __init__(
         self,
         faiss_dir: Path,
-        embedding_client: EmbeddingClientProtocol,
+        embedding_client: EmbeddingClient,
         *,
         l2_normalize: bool = False,
         poison_id_start: int = -1,
@@ -211,9 +210,7 @@ class FaissPoisoner:
         to_remove = {
             did.strip()
             for did in document_ids
-            if isinstance(did, str)
-            and did.strip()
-            and did.strip() in self._owned_ids
+            if isinstance(did, str) and did.strip() and did.strip() in self._owned_ids
         }
         if not to_remove:
             return

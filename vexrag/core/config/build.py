@@ -1,19 +1,25 @@
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
 from vexrag.core.attacks.registry import AttackRegistry
-from vexrag.core.evaluation import (
-    EmbeddingClientProtocol,
+from vexrag.core.evaluation.attack_verdict import CombineMode, EvaluationStrategy
+from vexrag.core.evaluation.composite_evaluator import CompositeEvaluator
+from vexrag.core.evaluation.cosine_similarity_metric import cosine_similarity
+from vexrag.core.evaluation.embedding_similarity_evaluator import (
     EmbeddingSimilarityEvaluator,
-    EvaluationStrategyProtocol,
-    JudgePromptBuilderProtocol,
-    LLMJudgeEvaluator,
 )
-from vexrag.core.evaluation.metrics.cosine_similarity import cosine_similarity
-from vexrag.core.evaluation.multi_evaluator import MultiEvaluator
-from vexrag.core.evaluation.strategies import EvaluationStrategy
+from vexrag.core.evaluation.evaluator_protocols import (
+    EmbeddingClient,
+    Evaluator,
+    JudgePromptBuilder,
+)
+from vexrag.core.evaluation.llm_judge_evaluator import LLMJudgeEvaluator
+from vexrag.core.evaluation.provider_client_adapters import (
+    ProviderBackedEmbeddingClient,
+    ProviderBackedJudgeClient,
+)
 from vexrag.core.providers import (
     build_embedding_client as build_provider_embedding_client,
 )
@@ -208,7 +214,7 @@ def _optional_poison_timeout(
 def _build_qdrant_corpus_poisoner(
     backend_cfg: Mapping[str, Any],
     *,
-    embedding_client: EmbeddingClientProtocol,
+    embedding_client: EmbeddingClient,
     l2_normalize: bool,
     base_dir: Path | None,
 ) -> QdrantPoisoner:
@@ -246,7 +252,7 @@ def _build_qdrant_corpus_poisoner(
 def _build_chroma_corpus_poisoner(
     backend_cfg: Mapping[str, Any],
     *,
-    embedding_client: EmbeddingClientProtocol,
+    embedding_client: EmbeddingClient,
     l2_normalize: bool,
     base_dir: Path | None,
 ) -> ChromaPoisoner:
@@ -285,7 +291,7 @@ def _build_chroma_corpus_poisoner(
 def _build_faiss_corpus_poisoner(
     backend_cfg: Mapping[str, Any],
     *,
-    embedding_client: EmbeddingClientProtocol,
+    embedding_client: EmbeddingClient,
     l2_normalize: bool,
     base_dir: Path | None,
 ) -> FaissPoisoner:
@@ -318,81 +324,121 @@ def _build_faiss_corpus_poisoner(
     )
 
 
-_LEGACY_EMBEDDING_STRATEGY = frozenset({"semantic_similarity"})
+_COMPOSITE_STRATEGY = "composite"
+
+_SIMILARITY_METRICS: dict[str, Callable[[Sequence[float], Sequence[float]], float]] = {
+    "cosine": cosine_similarity,
+}
+
+_EVALUATOR_BUILDERS: dict[
+    EvaluationStrategy,
+    Callable[..., Evaluator],
+] = {}
 
 
-def _normalize_evaluation_strategy(strategy: str) -> str:
-    if strategy in _LEGACY_EMBEDDING_STRATEGY:
-        return EvaluationStrategy.EMBEDDING_SIMILARITY
-    return strategy
+def _parse_evaluation_strategy(evaluation_config: Mapping[str, Any]) -> str:
+    return str(
+        evaluation_config.get("strategy", EvaluationStrategy.EMBEDDING_SIMILARITY)
+    ).strip()
 
 
-def _build_one_evaluator(
-    evaluation_config: Mapping[str, Any],
-    *,
-    attack_id: str,
-    registry: AttackRegistry,
-) -> EvaluationStrategyProtocol:
-    strategy = _normalize_evaluation_strategy(
-        str(
-            evaluation_config.get("strategy", EvaluationStrategy.EMBEDDING_SIMILARITY)
-        ).strip()
-    )
-    if strategy == EvaluationStrategy.EMBEDDING_SIMILARITY:
-        return _build_embedding_similarity(evaluation_config)
-    if strategy == EvaluationStrategy.LLM_JUDGE:
-        return _build_llm_judge(
-            evaluation_config, attack_id=attack_id, registry=registry
-        )
-    raise EvaluationConfigError(
-        "evaluation.strategy must be one of: "
-        f"{EvaluationStrategy.EMBEDDING_SIMILARITY}, {EvaluationStrategy.LLM_JUDGE}"
-    )
-
-
-def build_evaluation_strategy(
+def build_evaluator(
     config: Mapping[str, Any],
     *,
     attack_id: str,
     registry: AttackRegistry,
-) -> EvaluationStrategyProtocol:
-    has_bundle = "evaluations" in config
-    has_single = "evaluation" in config
-    if has_bundle and has_single:
+) -> Evaluator:
+    if "evaluations" in config:
         raise EvaluationConfigError(
-            "use either top-level evaluation or evaluations, not both"
+            "top-level 'evaluations' was removed; use evaluation.strategy: "
+            "composite with evaluation.evaluators"
         )
-    if has_bundle:
-        bundle = config["evaluations"]
-        if not isinstance(bundle, Mapping):
-            raise EvaluationConfigError("evaluations must be a mapping")
-        combine_raw = str(bundle.get("combine", "any")).strip().lower()
-        if combine_raw not in ("any", "all"):
-            raise EvaluationConfigError("evaluations.combine must be 'any' or 'all'")
-        raw_list = bundle.get("evaluators")
-        if not isinstance(raw_list, list) or not raw_list:
-            raise EvaluationConfigError(
-                "evaluations.evaluators must be a non-empty list of evaluator configs"
-            )
-        built: list[EvaluationStrategyProtocol] = []
-        for index, item in enumerate(raw_list):
-            if not isinstance(item, Mapping):
-                raise EvaluationConfigError(
-                    f"evaluations.evaluators[{index}] must be a mapping"
-                )
-            built.append(
-                _build_one_evaluator(
-                    item,
-                    attack_id=attack_id,
-                    registry=registry,
-                )
-            )
-        return MultiEvaluator(tuple(built), combine=combine_raw)
-
-    if not has_single:
-        raise EvaluationConfigError("configure evaluation or evaluations")
     evaluation_config = _evaluation_section(config)
-    return _build_one_evaluator(
+    strategy = _parse_evaluation_strategy(evaluation_config)
+    if strategy == _COMPOSITE_STRATEGY:
+        return _build_composite_evaluator(
+            evaluation_config,
+            attack_id=attack_id,
+            registry=registry,
+        )
+    try:
+        resolved = EvaluationStrategy(strategy)
+    except ValueError as exc:
+        supported = ", ".join(
+            (
+                _COMPOSITE_STRATEGY,
+                EvaluationStrategy.EMBEDDING_SIMILARITY,
+                EvaluationStrategy.LLM_JUDGE,
+            )
+        )
+        raise EvaluationConfigError(
+            f"evaluation.strategy must be one of: {supported}"
+        ) from exc
+    builder = _EVALUATOR_BUILDERS[resolved]
+    return builder(
+        evaluation_config,
+        attack_id=attack_id,
+        registry=registry,
+    )
+
+
+def _build_composite_evaluator(
+    evaluation_config: Mapping[str, Any],
+    *,
+    attack_id: str,
+    registry: AttackRegistry,
+) -> CompositeEvaluator:
+    combine_raw = str(evaluation_config.get("combine", CombineMode.ANY)).strip().lower()
+    try:
+        combine = CombineMode(combine_raw)
+    except ValueError as exc:
+        raise EvaluationConfigError(
+            "evaluation.combine must be 'any' or 'all'"
+        ) from exc
+    raw_list = evaluation_config.get("evaluators")
+    if not isinstance(raw_list, list) or not raw_list:
+        raise EvaluationConfigError(
+            "evaluation.evaluators must be a non-empty list when strategy is composite"
+        )
+    built: list[Evaluator] = []
+    for index, item in enumerate(raw_list):
+        if not isinstance(item, Mapping):
+            raise EvaluationConfigError(
+                f"evaluation.evaluators[{index}] must be a mapping"
+            )
+        built.append(
+            _build_evaluator_from_section(
+                item,
+                attack_id=attack_id,
+                registry=registry,
+            )
+        )
+    return CompositeEvaluator(tuple(built), combine=combine)
+
+
+def _build_evaluator_from_section(
+    evaluation_config: Mapping[str, Any],
+    *,
+    attack_id: str,
+    registry: AttackRegistry,
+) -> Evaluator:
+    strategy = _parse_evaluation_strategy(evaluation_config)
+    if strategy == _COMPOSITE_STRATEGY:
+        raise EvaluationConfigError("nested composite evaluators are not supported")
+    try:
+        resolved = EvaluationStrategy(strategy)
+    except ValueError as exc:
+        supported = ", ".join(
+            (
+                EvaluationStrategy.EMBEDDING_SIMILARITY,
+                EvaluationStrategy.LLM_JUDGE,
+            )
+        )
+        raise EvaluationConfigError(
+            f"evaluation.strategy must be one of: {supported}"
+        ) from exc
+    builder = _EVALUATOR_BUILDERS[resolved]
+    return builder(
         evaluation_config,
         attack_id=attack_id,
         registry=registry,
@@ -415,16 +461,23 @@ def attack_llm_client_section(
     return client_config
 
 
-def _build_embedding_similarity(
+def _build_embedding_similarity_evaluator(
     evaluation_config: Mapping[str, Any],
+    *,
+    attack_id: str,
+    registry: AttackRegistry,
 ) -> EmbeddingSimilarityEvaluator:
+    del attack_id, registry
     strategy_config = _strategy_section(
         evaluation_config, EvaluationStrategy.EMBEDDING_SIMILARITY
     )
     metric_name = str(strategy_config.get("metric", "cosine")).strip()
-    if metric_name != "cosine":
+    metric_fn = _SIMILARITY_METRICS.get(metric_name)
+    if metric_fn is None:
+        supported = ", ".join(sorted(_SIMILARITY_METRICS))
         raise EvaluationConfigError(
-            f"{EvaluationStrategy.EMBEDDING_SIMILARITY}.metric must be 'cosine'"
+            f"evaluation.{EvaluationStrategy.EMBEDDING_SIMILARITY}.metric "
+            f"must be one of: {supported}"
         )
 
     embedding_config = _client_section(
@@ -436,8 +489,10 @@ def _build_embedding_similarity(
         strategy_config, prefix=f"evaluation.{EvaluationStrategy.EMBEDDING_SIMILARITY}"
     )
     return EmbeddingSimilarityEvaluator(
-        embedding_client=build_provider_embedding_client(embedding_config),
-        metric=cosine_similarity,
+        embedding_client=ProviderBackedEmbeddingClient(
+            build_provider_embedding_client(embedding_config)
+        ),
+        metric=metric_fn,
         attack_similarity_threshold=strategy_config_accessor.get_optional_float(
             "attack_similarity_threshold", 0.75
         ),
@@ -450,7 +505,7 @@ def _build_embedding_similarity(
     )
 
 
-def _build_llm_judge(
+def _build_llm_judge_evaluator(
     evaluation_config: Mapping[str, Any],
     *,
     attack_id: str,
@@ -460,15 +515,23 @@ def _build_llm_judge(
     judge_config = _client_section(strategy_config, evaluation_config, "judge_client")
     prompt_builder = _resolve_judge_prompt_builder(registry, attack_id)
     return LLMJudgeEvaluator(
-        judge_client=build_provider_judge_client(judge_config),
+        judge_client=ProviderBackedJudgeClient(
+            build_provider_judge_client(judge_config)
+        ),
         prompt_builder=prompt_builder,
     )
+
+
+_EVALUATOR_BUILDERS[EvaluationStrategy.EMBEDDING_SIMILARITY] = (
+    _build_embedding_similarity_evaluator
+)
+_EVALUATOR_BUILDERS[EvaluationStrategy.LLM_JUDGE] = _build_llm_judge_evaluator
 
 
 def _resolve_judge_prompt_builder(
     registry: AttackRegistry,
     attack_id: str,
-) -> JudgePromptBuilderProtocol:
+) -> JudgePromptBuilder:
     factory = registry.get(attack_id).judge_prompt_builder_factory
     if factory is None:
         supported = ", ".join(
@@ -498,7 +561,7 @@ def _strategy_section(
 ) -> Mapping[str, Any]:
     nested = evaluation_config.get(strategy)
     if strategy == EvaluationStrategy.EMBEDDING_SIMILARITY and not nested:
-        nested = evaluation_config.get("semantic_similarity")
+        nested = evaluation_config.get(EvaluationStrategy.EMBEDDING_SIMILARITY)
     if nested is None:
         nested = {}
     if not isinstance(nested, Mapping):

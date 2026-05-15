@@ -17,7 +17,7 @@ from vexrag.core.attacks.command import (
 from vexrag.core.attacks.registry import AttackRegistry
 from vexrag.core.config import ScanConfigError
 from vexrag.core.config.build import (
-    build_evaluation_strategy as assemble_evaluation_strategy,
+    build_evaluator as assemble_evaluator,
 )
 from vexrag.core.llm_scan_probe import probe_scan_llms_for_materialized_config
 
@@ -91,7 +91,7 @@ def resolve_generate_cases_attack(
     return resolve_generate_cases_attack_id(config, registry, explicit=explicit)
 
 
-def build_evaluation_strategy(
+def build_evaluator(
     config: Mapping[str, Any],
     *,
     attack: str | None = None,
@@ -111,11 +111,10 @@ def build_evaluation_strategy(
         step = steps[0]
     else:
         raise ScanConfigError(
-            "pass attack='...' to build_evaluation_strategy when multiple attacks "
-            "are configured"
+            "pass attack='...' to build_evaluator when multiple attacks are configured"
         )
     materialized = materialize_step_config(config, step)
-    return assemble_evaluation_strategy(
+    return assemble_evaluator(
         materialized,
         attack_id=step.attack_id,
         registry=registry,

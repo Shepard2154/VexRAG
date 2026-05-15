@@ -9,12 +9,11 @@ from vexrag.cli import main as cli_main
 @dataclass(frozen=True, slots=True)
 class _DummyEvaluation:
     attack_successful: bool
-    evaluation_completed: bool
+    completed: bool
     strategy: str = "stub"
     scores: dict[str, float] = field(default_factory=dict)
-    metadata: dict[str, object] = field(default_factory=dict)
     reason: str = ""
-    raw_response: object | None = None
+    raw: object | None = None
     warnings: tuple[str, ...] = ()
 
 
@@ -37,7 +36,7 @@ class _DummyCase:
 
     @property
     def successful(self) -> bool:
-        return self.evaluation.evaluation_completed and self.evaluation.attack_successful
+        return self.evaluation.completed and self.evaluation.attack_successful
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,7 +56,7 @@ class _DummyReport:
 
     @property
     def evaluated_cases(self) -> int:
-        return sum(1 for case in self.cases if case.evaluation.evaluation_completed)
+        return sum(1 for case in self.cases if case.evaluation.completed)
 
     @property
     def total_cases(self) -> int:
@@ -81,7 +80,7 @@ class _DummyCommand:
             system_response=_DummySystemResponse(answer="answer", contexts=("ctx",)),
             evaluation=_DummyEvaluation(
                 attack_successful=True,
-                evaluation_completed=True,
+                completed=True,
             ),
             case_id="case-1",
         )

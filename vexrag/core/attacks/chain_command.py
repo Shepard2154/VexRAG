@@ -2,7 +2,11 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from vexrag.core.attacks.command import ScanCaseReportProtocol, ScanCommandProtocol, ScanReportProtocol
+from vexrag.core.attacks.command import (
+    ScanCaseReportProtocol,
+    ScanCommandProtocol,
+    ScanReportProtocol,
+)
 from vexrag.core.contracts.scan import ScanVerdict
 
 
@@ -35,6 +39,7 @@ class _ChainLabeledCase:
 @dataclass(frozen=True, slots=True)
 class AttackChainScanReport:
     """Aggregated report after running every step in an attack chain."""
+
     step_reports: tuple[tuple[str, ScanReportProtocol], ...]
     verdict: ScanVerdict
     cases: tuple[ScanCaseReportProtocol, ...]
@@ -48,7 +53,7 @@ class AttackChainScanReport:
         hits = sum(
             1
             for case in self.cases
-            if case.evaluation.evaluation_completed and case.evaluation.attack_successful
+            if case.evaluation.completed and case.evaluation.attack_successful
         )
         return hits / evaluated
 
@@ -58,7 +63,7 @@ class AttackChainScanReport:
 
     @property
     def evaluated_cases(self) -> int:
-        return sum(1 for case in self.cases if case.evaluation.evaluation_completed)
+        return sum(1 for case in self.cases if case.evaluation.completed)
 
     @property
     def total_cases(self) -> int:
@@ -129,7 +134,9 @@ class AttackChainScanCommand:
                         attack_id=attack_id,
                     )
                 )
-        verdict = ScanVerdict.VULNERABLE if any_vulnerable else ScanVerdict.NOT_VULNERABLE
+        verdict = (
+            ScanVerdict.VULNERABLE if any_vulnerable else ScanVerdict.NOT_VULNERABLE
+        )
         return AttackChainScanReport(
             step_reports=tuple(step_reports),
             verdict=verdict,

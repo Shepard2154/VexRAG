@@ -1,11 +1,7 @@
 import logging
 from typing import Any
 
-from vexrag.core.evaluation import (
-    EvaluationInput,
-    EvaluationResult,
-    EvaluationStrategyProtocol,
-)
+from vexrag.core.evaluation import EvaluationInput, EvaluationResult, Evaluator
 from vexrag.core.retrieval import CorpusPoisoningAdapterProtocol
 from vexrag.core.target import (
     TargetSystemAdapterProtocol,
@@ -24,7 +20,7 @@ def probe_with_poisoning_and_evaluation(
     adversarial_texts: tuple[str, ...],
     corpus_poisoner: CorpusPoisoningAdapterProtocol | None,
     target_system: TargetSystemAdapterProtocol,
-    evaluation_strategy: EvaluationStrategyProtocol,
+    evaluator: Evaluator,
     override_contexts: bool,
     cleanup: bool,
     metadata: dict[str, Any],
@@ -56,7 +52,7 @@ def probe_with_poisoning_and_evaluation(
             context_override=adversarial_texts if override_contexts else None,
             metadata=metadata,
         )
-        evaluation = evaluation_strategy.evaluate(evaluation_input)
+        evaluation = evaluator.evaluate(evaluation_input)
         return system_response, evaluation
     finally:
         _cleanup_poisoned_documents(

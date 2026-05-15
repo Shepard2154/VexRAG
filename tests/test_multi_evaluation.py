@@ -4,9 +4,10 @@ from vexrag.attack_algorithms.hijackrag.plugin import HIJACK_PLUGIN
 from vexrag.attack_algorithms.poisonedrag.plugin import POISON_PLUGIN
 from vexrag.core.attacks.registry import AttackRegistry
 from vexrag.core.config import EvaluationConfigError
-from vexrag.core.config.build import build_evaluation_strategy
-from vexrag.core.evaluation.multi_evaluator import MultiEvaluator
-from vexrag.core.evaluation.protocols import EvaluationInput, EvaluationResult
+from vexrag.core.config.build import build_evaluator
+from vexrag.core.evaluation.attack_verdict import CombineMode, EvaluationResult
+from vexrag.core.evaluation.composite_evaluator import CompositeEvaluator
+from vexrag.core.evaluation.scan_case_input import EvaluationInput
 
 
 class _FixedEvaluator:
@@ -29,18 +30,18 @@ class _FixedEvaluator:
         )
 
 
-def test_multi_sub_evaluators_exposes_children() -> None:
+def test_composite_sub_evaluators_exposes_children() -> None:
     inner = (_FixedEvaluator("a", False), _FixedEvaluator("b", True))
-    m = MultiEvaluator(inner, combine="any")
-    assert m.sub_evaluators == inner
+    composite = CompositeEvaluator(inner, combine=CombineMode.ANY)
+    assert composite.sub_evaluators == inner
 
 
-def test_multi_any_true_if_one_succeeds() -> None:
-    m = MultiEvaluator(
+def test_composite_any_true_if_one_succeeds() -> None:
+    composite = CompositeEvaluator(
         (_FixedEvaluator("a", False), _FixedEvaluator("b", True)),
-        combine="any",
+        combine=CombineMode.ANY,
     )
-    r = m.evaluate(
+    r = composite.evaluate(
         EvaluationInput(
             query="q",
             actual_answer="x",
@@ -52,12 +53,12 @@ def test_multi_any_true_if_one_succeeds() -> None:
     assert "a" in r.strategy and "b" in r.strategy
 
 
-def test_multi_all_false_if_one_fails() -> None:
-    m = MultiEvaluator(
+def test_composite_all_false_if_one_fails() -> None:
+    composite = CompositeEvaluator(
         (_FixedEvaluator("a", True), _FixedEvaluator("b", False)),
-        combine="all",
+        combine=CombineMode.ALL,
     )
-    r = m.evaluate(
+    r = composite.evaluate(
         EvaluationInput(
             query="q",
             actual_answer="x",
@@ -68,27 +69,26 @@ def test_multi_all_false_if_one_fails() -> None:
     assert r.attack_successful is False
 
 
-def test_multi_empty_raises() -> None:
+def test_composite_empty_raises() -> None:
     with pytest.raises(ValueError, match="non-empty"):
-        MultiEvaluator((), combine="any")
+        CompositeEvaluator((), combine=CombineMode.ANY)
 
 
-def test_build_evaluation_strategy_rejects_both_evaluation_keys() -> None:
+def test_build_evaluator_rejects_legacy_evaluations_key() -> None:
     reg = AttackRegistry()
     reg.register(HIJACK_PLUGIN)
     reg.register(POISON_PLUGIN)
     cfg = {
-        "evaluation": {"strategy": "embedding_similarity"},
         "evaluations": {
             "combine": "any",
             "evaluators": [{"strategy": "embedding_similarity"}],
         },
     }
-    with pytest.raises(EvaluationConfigError, match="not both"):
-        build_evaluation_strategy(cfg, attack_id="hijackrag", registry=reg)
+    with pytest.raises(EvaluationConfigError, match="evaluations"):
+        build_evaluator(cfg, attack_id="hijackrag", registry=reg)
 
 
-def test_build_evaluation_strategy_evaluations_bundle() -> None:
+def test_build_evaluator_composite_bundle() -> None:
     reg = AttackRegistry()
     reg.register(HIJACK_PLUGIN)
     reg.register(POISON_PLUGIN)
@@ -105,7 +105,8 @@ def test_build_evaluation_strategy_evaluations_bundle() -> None:
         "attack_margin_threshold": 0.05,
     }
     cfg = {
-        "evaluations": {
+        "evaluation": {
+            "strategy": "composite",
             "combine": "all",
             "evaluators": [
                 {
@@ -124,14 +125,13 @@ def test_build_evaluation_strategy_evaluations_bundle() -> None:
             ],
         },
     }
-    strat = build_evaluation_strategy(cfg, attack_id="hijackrag", registry=reg)
-    assert isinstance(strat, MultiEvaluator)
+    strat = build_evaluator(cfg, attack_id="hijackrag", registry=reg)
+    assert isinstance(strat, CompositeEvaluator)
 
 
-def test_build_evaluation_strategy_accepts_legacy_semantic_similarity_alias() -> None:
+def test_build_evaluator_rejects_unknown_similarity_metric() -> None:
     reg = AttackRegistry()
     reg.register(HIJACK_PLUGIN)
-    reg.register(POISON_PLUGIN)
     emb = {
         "provider": "ollama",
         "base_url": "http://localhost:11434",
@@ -140,20 +140,12 @@ def test_build_evaluation_strategy_accepts_legacy_semantic_similarity_alias() ->
     }
     cfg = {
         "evaluation": {
-            "strategy": "semantic_similarity",
+            "strategy": "embedding_similarity",
             "embedding_client": emb,
-            "semantic_similarity": {
-                "metric": "cosine",
-                "attack_similarity_threshold": 0.9,
-                "max_reference_similarity": 0.5,
-                "attack_margin_threshold": 0.05,
+            "embedding_similarity": {
+                "metric": "euclidean",
             },
         },
     }
-    from vexrag.core.evaluation.embedding_similarity_evaluator import (
-        EmbeddingSimilarityEvaluator,
-    )
-
-    strat = build_evaluation_strategy(cfg, attack_id="hijackrag", registry=reg)
-    assert isinstance(strat, EmbeddingSimilarityEvaluator)
-    assert strat.attack_similarity_threshold == 0.9
+    with pytest.raises(EvaluationConfigError, match="metric must be one of"):
+        build_evaluator(cfg, attack_id="hijackrag", registry=reg)

@@ -46,7 +46,8 @@ attacks:
     scan:
       corpus_poisoning:
         filename_prefix: poisonedrag
-    evaluations:
+    evaluation:
+      strategy: composite
       combine: any
       evaluators:
         - strategy: llm_judge
@@ -59,7 +60,8 @@ attacks:
             timeout: 600
           llm_judge: {}
 
-evaluations:
+evaluation:
+  strategy: composite
   combine: any
   evaluators:
     - strategy: embedding_similarity

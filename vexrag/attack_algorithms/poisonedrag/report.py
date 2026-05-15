@@ -8,6 +8,7 @@ from vexrag.core.target import TargetSystemResponse
 @dataclass(frozen=True, slots=True)
 class PoisonedRAGCaseResult:
     """Single PoisonedRAG target-system check."""
+
     query: str
     adversarial_texts: tuple[str, ...]
     expected_incorrect_answer: str
@@ -18,10 +19,7 @@ class PoisonedRAGCaseResult:
 
     @property
     def successful(self) -> bool:
-        return (
-            self.evaluation.evaluation_completed
-            and self.evaluation.attack_successful
-        )
+        return self.evaluation.completed and self.evaluation.attack_successful
 
     @property
     def warnings(self) -> tuple[str, ...]:
@@ -31,6 +29,7 @@ class PoisonedRAGCaseResult:
 @dataclass(frozen=True, slots=True)
 class PoisonedRAGScanReport:
     """Machine-readable report for a PoisonedRAG scan."""
+
     verdict: ScanVerdict
     cases: tuple[PoisonedRAGCaseResult, ...]
     generated_adversarial_texts: tuple[str, ...]
@@ -42,7 +41,7 @@ class PoisonedRAGScanReport:
 
     @property
     def evaluated_cases(self) -> int:
-        return sum(1 for case in self.cases if case.evaluation.evaluation_completed)
+        return sum(1 for case in self.cases if case.evaluation.completed)
 
     @property
     def successful_cases(self) -> int:
