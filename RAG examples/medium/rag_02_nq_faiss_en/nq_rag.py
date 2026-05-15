@@ -126,7 +126,9 @@ class NQRAG:
             return
         faiss.write_index(self._index, str(self._faiss_index_path))
         self._metadata_path.write_text(
-            json.dumps({"ordered_ids": self._ordered_ids}, ensure_ascii=False, indent=2),
+            json.dumps(
+                {"ordered_ids": self._ordered_ids}, ensure_ascii=False, indent=2
+            ),
             encoding="utf-8",
         )
 
@@ -416,7 +418,9 @@ DEFAULT_PORT = int(CONFIG["port"])
 LLM_CLIENT = LLMClient(CONFIG["llm"])
 
 nq_dataset_config = CONFIG.get("nq_dataset", {})
-if isinstance(nq_dataset_config, Mapping) and bool(nq_dataset_config.get("enabled", True)):
+if isinstance(nq_dataset_config, Mapping) and bool(
+    nq_dataset_config.get("enabled", True)
+):
     _examples = load_nq_examples(nq_dataset_config)
 else:
     _examples = load_examples(DEFAULT_DATASET)

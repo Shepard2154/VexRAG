@@ -11,6 +11,7 @@ _STEP_KEYS = frozenset({"id", "params", "scan", "evaluation", "evaluations"})
 @dataclass(frozen=True, slots=True)
 class AttackStepSpec:
     """One entry in the scan config ``attacks`` list."""
+
     attack_id: str
     params: Mapping[str, Any]
     scan_override: Mapping[str, Any] | None
@@ -155,6 +156,4 @@ def materialize_config_for_attack_id(
     for step in parse_attack_steps(root, registry):
         if step.attack_id == attack_id:
             return materialize_step_config(root, step)
-    raise AttackRegistryError(
-        f"no attacks step with id {attack_id!r} in the scan YAML"
-    )
+    raise AttackRegistryError(f"no attacks step with id {attack_id!r} in the scan YAML")

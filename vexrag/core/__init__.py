@@ -1,17 +1,18 @@
 from vexrag.core.contracts import ScanVerdict, TargetStyle
 from vexrag.core.correct_answer_prompt import build_correct_answer_prompt
 from vexrag.core.evaluation import (
-    EmbeddingClientProtocol,
+    CompositeEvaluator,
+    EmbeddingClient,
     EmbeddingSimilarityEvaluator,
     EvaluationInput,
     EvaluationResult,
-    EvaluationStrategyProtocol,
-    JudgeLLMProtocol,
-    JudgePromptBuilderProtocol,
-    JudgeResponse,
+    Evaluator,
+    JudgeClient,
+    JudgeDetails,
+    JudgePromptBuilder,
     JudgeResponseValidationError,
     LLMJudgeEvaluator,
-    validate_judge_response,
+    parse_judge_llm_response,
 )
 from vexrag.core.llm_response_validation import (
     LLMPayloadValidationError,
@@ -59,17 +60,18 @@ __all__ = [
     "EvaluationInput",
     "EvaluationResult",
     # Evaluation protocols
-    "EmbeddingClientProtocol",
-    "EvaluationStrategyProtocol",
-    "JudgeLLMProtocol",
-    "JudgePromptBuilderProtocol",
+    "Evaluator",
+    "EmbeddingClient",
+    "JudgeClient",
+    "JudgePromptBuilder",
     # LLM judge evaluation
-    "JudgeResponse",
+    "JudgeDetails",
     "JudgeResponseValidationError",
     "LLMJudgeEvaluator",
-    "validate_judge_response",
+    "parse_judge_llm_response",
     # Embedding similarity evaluation
     "EmbeddingSimilarityEvaluator",
+    "CompositeEvaluator",
     # Providers
     "OllamaEmbeddingClient",
     "OllamaJudgeClient",

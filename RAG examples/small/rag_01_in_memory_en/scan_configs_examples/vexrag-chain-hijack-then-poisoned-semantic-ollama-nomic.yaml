@@ -1,6 +1,6 @@
 # Example: run HijackRAG then PoisonedRAG in one `vx scan` (shared target_system, scan defaults).
-# Each step can override `scan` / `evaluation` / `evaluations` for that step only (merged over root).
-# Multiple evaluators: `evaluations.combine` is `any` (attack succeeds if any evaluator says so) or `all`.
+# Each step can override `scan` / `evaluation` for that step only (merged over root).
+# Multiple evaluators: `evaluation.combine` is `any` (attack succeeds if any evaluator says so) or `all`.
 
 target_system:
   http:
@@ -50,7 +50,8 @@ attacks:
       corpus_poisoning:
         filename_prefix: poisonedrag
 
-evaluations:
+evaluation:
+  strategy: composite
   combine: any
   evaluators:
     - strategy: embedding_similarity

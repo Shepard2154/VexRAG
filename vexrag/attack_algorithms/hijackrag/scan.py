@@ -4,8 +4,6 @@ from dataclasses import dataclass
 from time import perf_counter
 from typing import Any
 
-from vexrag.core.attacks.command import ScanCaseReportProtocol
-
 from vexrag.attack_algorithms.hijackrag.generator import HijackRAGGenerator
 from vexrag.attack_algorithms.hijackrag.report import (
     HijackRAGCaseResult,
@@ -13,8 +11,9 @@ from vexrag.attack_algorithms.hijackrag.report import (
 )
 from vexrag.attack_algorithms.hijackrag.schema import HijackRAGRequest, HijackRAGResult
 from vexrag.core.adversarial_probe import probe_with_poisoning_and_evaluation
+from vexrag.core.attacks.command import ScanCaseReportProtocol
 from vexrag.core.contracts import ScanVerdict
-from vexrag.core.evaluation import EvaluationStrategyProtocol
+from vexrag.core.evaluation import Evaluator
 from vexrag.core.retrieval import CorpusPoisoningAdapterProtocol
 from vexrag.core.target import TargetSystemAdapterProtocol
 
@@ -40,12 +39,12 @@ class HijackRAGScanRunner:
         self,
         generator: HijackRAGGenerator,
         target_system: TargetSystemAdapterProtocol,
-        evaluation_strategy: EvaluationStrategyProtocol,
+        evaluator: Evaluator,
         corpus_poisoner: CorpusPoisoningAdapterProtocol | None = None,
     ) -> None:
         self.generator = generator
         self.target_system = target_system
-        self.evaluation_strategy = evaluation_strategy
+        self.evaluator = evaluator
         self.corpus_poisoner = corpus_poisoner
 
     def run(
@@ -140,7 +139,7 @@ class HijackRAGScanRunner:
             adversarial_texts=adversarial_texts,
             corpus_poisoner=self.corpus_poisoner,
             target_system=self.target_system,
-            evaluation_strategy=self.evaluation_strategy,
+            evaluator=self.evaluator,
             override_contexts=override_contexts,
             cleanup=cleanup,
             metadata=metadata,
@@ -149,11 +148,11 @@ class HijackRAGScanRunner:
         elapsed_ms = int((perf_counter() - started) * 1000)
         LOGGER.info(
             "case_done attack=hijackrag case_id=%s run_index=%s duration_ms=%s "
-            "evaluation_completed=%s attack_successful=%s",
+            "completed=%s attack_successful=%s",
             metadata.get("case_id", ""),
             run_index,
             elapsed_ms,
-            evaluation.evaluation_completed,
+            evaluation.completed,
             evaluation.attack_successful,
         )
         return HijackRAGCaseResult(
@@ -172,11 +171,13 @@ class HijackRAGScanRunner:
         cases: tuple[HijackRAGCaseResult, ...],
         config: HijackRAGScanConfig,
     ) -> HijackRAGScanReport:
-        evaluated = sum(1 for case in cases if case.evaluation.evaluation_completed)
+        evaluated = sum(1 for case in cases if case.evaluation.completed)
         successful_cases = sum(case.successful for case in cases)
         success_rate = successful_cases / evaluated if evaluated else 0.0
-        vulnerable = evaluated > 0 and successful_cases > 0 and (
-            success_rate >= config.attack_success_rate_threshold
+        vulnerable = (
+            evaluated > 0
+            and successful_cases > 0
+            and (success_rate >= config.attack_success_rate_threshold)
         )
 
         warnings = tuple(

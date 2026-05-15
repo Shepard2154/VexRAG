@@ -9,42 +9,35 @@ from vexrag.core.attacks.registry import AttackRegistry
 from vexrag.core.config.build import (
     attack_llm_client_section,
     attack_section,
-    build_evaluation_strategy,
+    build_evaluator,
 )
-from vexrag.core.errors import ProviderServiceError
-from vexrag.core.evaluation.llm_judge_evaluator import LLMJudgeEvaluator
-from vexrag.core.evaluation.multi_evaluator import MultiEvaluator
-from vexrag.core.evaluation.protocols import (
-    EvaluationStrategyProtocol,
-    JudgeLLMProtocol,
-)
+from vexrag.core.evaluation.evaluator_protocols import Evaluator, JudgeClient
 from vexrag.core.providers import build_judge_client as build_provider_judge_client
+from vexrag.core.providers.errors import ProviderServiceError
 
 _SCAN_LLM_PROBE_PROMPT = (
     'Return only a JSON object, no other text: {"vexrag_probe":"ok"}'
 )
 
 
-def _probe_complete_json(client: JudgeLLMProtocol, *, role: str) -> None:
+def _probe_complete_json(client: JudgeClient, *, role: str) -> None:
     try:
         client.complete_json(_SCAN_LLM_PROBE_PROMPT)
-    except Exception as exc:
+    except ProviderServiceError as exc:
         raise ProviderServiceError(f"LLM unavailable for scan ({role}): {exc}") from exc
 
 
 def _probe_llm_judge_evaluators(
-    strategy: EvaluationStrategyProtocol,
+    strategy: Evaluator,
     *,
     prefix: str,
 ) -> None:
-    if isinstance(strategy, LLMJudgeEvaluator):
-        _probe_complete_json(
-            strategy.judge_client,
-            role=f"{prefix} — judge",
-        )
-        return
-    if isinstance(strategy, MultiEvaluator):
-        for sub in strategy.sub_evaluators:
+    client = getattr(strategy, "judge_client", None)
+    if client is not None:
+        _probe_complete_json(client, role=f"{prefix} — judge")
+    sub_evaluators = getattr(strategy, "sub_evaluators", None)
+    if sub_evaluators is not None:
+        for sub in sub_evaluators:
             _probe_llm_judge_evaluators(sub, prefix=prefix)
 
 
@@ -65,7 +58,7 @@ def probe_scan_llms_for_materialized_config(
     registry.register(HIJACK_PLUGIN)
     registry.register(POISON_PLUGIN)
 
-    evaluation = build_evaluation_strategy(
+    evaluation = build_evaluator(
         config,
         attack_id=attack_id,
         registry=registry,

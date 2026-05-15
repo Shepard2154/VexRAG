@@ -1,4 +1,4 @@
-from vexrag.core.evaluation import EmbeddingClientProtocol
+from vexrag.core.evaluation import EmbeddingClient
 from vexrag.core.retrieval.poisoning.contracts import CorpusPoisoningError
 
 
@@ -27,7 +27,7 @@ def optional_l2_normalize_batch(
 
 
 def embed_poison_vectors(
-    embedding_client: EmbeddingClientProtocol,
+    embedding_client: EmbeddingClient,
     texts: list[str],
     *,
     l2_normalize: bool,

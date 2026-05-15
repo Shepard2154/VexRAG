@@ -6,7 +6,6 @@ from vexrag.attack_algorithms.poisonedrag.prompts import (
     PROMPT_VERSION,
     build_poison_candidates_prompt,
 )
-from vexrag.core.correct_answer_prompt import build_correct_answer_prompt
 from vexrag.attack_algorithms.poisonedrag.schema import (
     PoisonedRAGMeta,
     PoisonedRAGRequest,
@@ -19,6 +18,7 @@ from vexrag.attack_algorithms.poisonedrag.validators import (
     validate_poison_payload,
 )
 from vexrag.core.contracts import CorrectAnswerProviderProtocol, LLMClientProtocol
+from vexrag.core.correct_answer_prompt import build_correct_answer_prompt
 
 
 class PoisonedRAGGenerator:

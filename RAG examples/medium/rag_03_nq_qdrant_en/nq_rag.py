@@ -446,7 +446,9 @@ DEFAULT_PORT = int(CONFIG["port"])
 LLM_CLIENT = LLMClient(CONFIG["llm"])
 
 nq_dataset_config = CONFIG.get("nq_dataset", {})
-if isinstance(nq_dataset_config, Mapping) and bool(nq_dataset_config.get("enabled", True)):
+if isinstance(nq_dataset_config, Mapping) and bool(
+    nq_dataset_config.get("enabled", True)
+):
     _examples = load_nq_examples(nq_dataset_config)
 else:
     _examples = load_examples(DEFAULT_DATASET)

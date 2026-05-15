@@ -3,7 +3,8 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from vexrag.core.evaluation import EmbeddingClientProtocol
+from vexrag.core.evaluation import EmbeddingClient
+
 from .._texts import nonempty_stripped_strs
 from ..contracts import CorpusPoisoningError
 from ..embeddings import embed_poison_vectors
@@ -44,7 +45,7 @@ class ChromaPoisoner:
         host: str | None,
         port: int,
         collection_name: str,
-        embedding_client: EmbeddingClientProtocol,
+        embedding_client: EmbeddingClient,
         l2_normalize: bool = False,
     ) -> None:
         try:

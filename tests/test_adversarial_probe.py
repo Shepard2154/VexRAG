@@ -39,7 +39,7 @@ def test_probe_runs_target_and_evaluation_without_corpus() -> None:
         adversarial_texts=("ctx1",),
         corpus_poisoner=None,
         target_system=target,
-        evaluation_strategy=evaluation,
+        evaluator=evaluation,
         override_contexts=False,
         cleanup=False,
         metadata=metadata,

@@ -1,13 +1,11 @@
 import pytest
 
-from vexrag.core.errors import ProviderServiceError
+from vexrag.core.evaluation.attack_verdict import EvaluationStrategy
 from vexrag.core.evaluation.embedding_similarity_evaluator import (
     EmbeddingSimilarityEvaluator,
 )
-from vexrag.core.evaluation.errors import EvaluatorError
-from vexrag.core.evaluation.metrics.errors import ZeroNormEmbeddingError
-from vexrag.core.evaluation.protocols import EvaluationInput
-from vexrag.core.evaluation.strategies import EvaluationStrategy
+from vexrag.core.evaluation.errors import EvaluationDependencyError, EvaluatorError
+from vexrag.core.evaluation.scan_case_input import EvaluationInput
 
 
 class _FailingEmbeddingClient:
@@ -29,14 +27,12 @@ def _sample_input() -> EvaluationInput:
     )
 
 
-def test_embedding_similarity_maps_provider_service_error_to_incomplete_result() -> (
-    None
-):
+def test_embedding_similarity_maps_dependency_error_to_incomplete_result() -> None:
     ev = EmbeddingSimilarityEvaluator(
-        embedding_client=_FailingEmbeddingClient(ProviderServiceError("svc down"))
+        embedding_client=_FailingEmbeddingClient(EvaluationDependencyError("svc down"))
     )
     r = ev.evaluate(_sample_input())
-    assert r.evaluation_completed is False
+    assert r.completed is False
     assert r.attack_successful is False
     assert r.strategy == EvaluationStrategy.EMBEDDING_SIMILARITY
     assert "svc down" in (r.reason or "")
@@ -49,27 +45,31 @@ def test_embedding_similarity_maps_wrong_embedding_count_to_incomplete_result() 
 
     ev = EmbeddingSimilarityEvaluator(embedding_client=_WrongCountClient())
     r = ev.evaluate(_sample_input())
-    assert r.evaluation_completed is False
+    assert r.completed is False
     assert r.attack_successful is False
     assert "one vector per input text" in (r.reason or "")
 
 
-def test_embedding_similarity_propagates_evaluator_errors() -> None:
+def test_embedding_similarity_maps_evaluator_errors_to_incomplete_result() -> None:
     ev = EmbeddingSimilarityEvaluator(
         embedding_client=_FailingEmbeddingClient(EvaluatorError("boom"))
     )
-    with pytest.raises(EvaluatorError, match="boom"):
-        ev.evaluate(_sample_input())
+    r = ev.evaluate(_sample_input())
+    assert r.completed is False
+    assert r.attack_successful is False
+    assert "boom" in (r.reason or "")
 
 
-def test_embedding_similarity_propagates_metric_errors() -> None:
+def test_embedding_similarity_maps_metric_errors_to_incomplete_result() -> None:
     class _ZeroNormClient:
         def embed_texts(self, texts):
             return ([0.0, 0.0], [1.0, 0.0], [0.0, 1.0])
 
     ev = EmbeddingSimilarityEvaluator(embedding_client=_ZeroNormClient())
-    with pytest.raises(ZeroNormEmbeddingError, match="zero magnitude"):
-        ev.evaluate(_sample_input())
+    r = ev.evaluate(_sample_input())
+    assert r.completed is False
+    assert r.attack_successful is False
+    assert "zero magnitude" in (r.reason or "")
 
 
 def test_embedding_similarity_propagates_unexpected_client_errors() -> None:

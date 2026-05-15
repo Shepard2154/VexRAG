@@ -55,6 +55,7 @@ class ScanCommandProtocol(Protocol):
 
 class ConfiguredScanCommand:
     """Wires a runner with requests and scan config."""
+
     __slots__ = ("runner", "requests", "scan_config")
 
     def __init__(self, runner: Any, requests: Any, scan_config: Any) -> None:

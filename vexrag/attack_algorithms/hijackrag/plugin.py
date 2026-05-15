@@ -21,7 +21,7 @@ from vexrag.core.config.build import (
     attack_llm_client_section,
     attack_section,
     build_corpus_poisoner,
-    build_evaluation_strategy,
+    build_evaluator,
     build_target_system,
     case_configs_from_value,
     cleanup_option,
@@ -241,7 +241,7 @@ def _build_scan_command(
         target_system=target_system,
         base_dir=base_dir,
     )
-    evaluation_strategy = build_evaluation_strategy(
+    evaluator = build_evaluator(
         config,
         attack_id="hijackrag",
         registry=registry,
@@ -250,7 +250,7 @@ def _build_scan_command(
         runner=HijackRAGScanRunner(
             generator=generator,
             target_system=target_system,
-            evaluation_strategy=evaluation_strategy,
+            evaluator=evaluator,
             corpus_poisoner=build_corpus_poisoner(config, base_dir=base_dir),
         ),
         requests=build_hijackrag_requests(config, base_dir=base_dir),

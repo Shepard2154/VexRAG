@@ -85,10 +85,8 @@ class NQRAG:
         self._extra_context_files: tuple[Path, ...] = ()
         self.llm_client = llm_client
         self._client = chromadb.PersistentClient(path=str(chroma_dir))
-        self._embedding_fn = (
-            embedding_functions.SentenceTransformerEmbeddingFunction(
-                model_name=embedding_model
-            )
+        self._embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
+            model_name=embedding_model
         )
         self.collection = self._client.get_or_create_collection(
             name=collection_name,
@@ -396,7 +394,9 @@ DEFAULT_PORT = int(CONFIG["port"])
 LLM_CLIENT = LLMClient(CONFIG["llm"])
 
 nq_dataset_config = CONFIG.get("nq_dataset", {})
-if isinstance(nq_dataset_config, Mapping) and bool(nq_dataset_config.get("enabled", True)):
+if isinstance(nq_dataset_config, Mapping) and bool(
+    nq_dataset_config.get("enabled", True)
+):
     _examples = load_nq_examples(nq_dataset_config)
 else:
     _examples = load_examples(DEFAULT_DATASET)

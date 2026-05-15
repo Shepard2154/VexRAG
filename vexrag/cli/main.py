@@ -646,7 +646,7 @@ def _print_single_case_detail(
     show_raw_responses: bool = False,
 ) -> None:
     label = case.case_id or f"#{case_index}"
-    if not case.evaluation.evaluation_completed:
+    if not case.evaluation.completed:
         verdict = "NOT_EVALUATED"
     elif case.successful:
         verdict = "SUCCESS"
@@ -672,10 +672,10 @@ def _print_single_case_detail(
     _print_field("LLM answer", case.system_response.answer)
     if case.evaluation.reason:
         _print_field("Evaluation reason", case.evaluation.reason)
-    if show_raw_responses and case.evaluation.raw_response is not None:
+    if show_raw_responses and case.evaluation.raw is not None:
         _print_field(
             "Judge raw response",
-            _format_raw_response(case.evaluation.raw_response),
+            _format_raw_response(case.evaluation.raw),
         )
     _print_contexts(case.system_response.contexts, show_summary=False)
     _print_poisoned_context_hit_rate(
@@ -701,9 +701,9 @@ def _format_evaluation(evaluation: Any) -> str:
 
 
 def _judge_answer_label(evaluation: Any) -> object | None:
-    metadata = getattr(evaluation, "metadata", None)
-    if isinstance(metadata, Mapping):
-        return metadata.get("judge_answer_label")
+    judge = getattr(evaluation, "judge", None)
+    if judge is not None:
+        return getattr(judge, "label", None)
     return None
 
 

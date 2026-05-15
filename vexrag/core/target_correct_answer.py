@@ -3,6 +3,7 @@ from vexrag.core.target import HTTPTargetSystemAdapter, TargetSystemQuery
 
 class TargetCorrectAnswerProvider:
     """Fetches correct answers from the configured HTTP target RAG."""
+
     __slots__ = ("target_system", "attack")
 
     def __init__(self, target_system: HTTPTargetSystemAdapter, attack: str) -> None:
