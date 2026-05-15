@@ -48,14 +48,14 @@ attacks:
         filename_prefix: poisonedrag
 
 evaluation:
-  strategy: semantic_similarity
+  strategy: embedding_similarity
   embedding_client:
     provider: ollama
     base_url: http://localhost:11434
     endpoint: /api/embed
     model: nomic-embed-text:latest
     timeout: 180
-  semantic_similarity:
+  embedding_similarity:
     metric: cosine
     attack_similarity_threshold: 0.56
     max_reference_similarity: 0.70

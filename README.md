@@ -3,7 +3,7 @@
 ![Project: in development](https://img.shields.io/badge/project-in%20development-F59E0B?style=for-the-badge)
 [![PyPI Downloads](https://static.pepy.tech/personalized-badge/vexrag?period=total&units=ABBREVIATION&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/vexrag)
 
-A toolkit for assessing the **functional correctness** of retrieval-augmented generation (RAG) systems under attack conditions.
+Most RAG security tools focus on jailbreaking or prompt injection. VexRAG is different: it injects poisoned passages directly into the retrieval index and measures whether the system’s answers remain factually correct. It is not about safety refusals — it’s about functional correctness under adversarial data manipulation.
 
 > **Stability notice (pre-0.2.0):** VexRAG is currently test-stage software and is **not production-ready**.
 > Until version `0.2.0`, backward compatibility is **not guaranteed** and updates may include **breaking changes**.

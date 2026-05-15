@@ -11,14 +11,14 @@ from vexrag.core.config.build import (
     attack_section,
     build_evaluation_strategy,
 )
-from vexrag.core.evaluation.llm_judge import LLMJudgeEvaluator
-from vexrag.core.evaluation.multi import MultiEvaluator
+from vexrag.core.errors import ProviderServiceError
+from vexrag.core.evaluation.llm_judge_evaluator import LLMJudgeEvaluator
+from vexrag.core.evaluation.multi_evaluator import MultiEvaluator
 from vexrag.core.evaluation.protocols import (
     EvaluationStrategyProtocol,
     JudgeLLMProtocol,
 )
 from vexrag.core.providers import build_judge_client as build_provider_judge_client
-from vexrag.core.providers.errors import ProviderServiceError
 
 _SCAN_LLM_PROBE_PROMPT = (
     'Return only a JSON object, no other text: {"vexrag_probe":"ok"}'

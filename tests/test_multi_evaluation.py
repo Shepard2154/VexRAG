@@ -5,7 +5,7 @@ from vexrag.attack_algorithms.poisonedrag.plugin import POISON_PLUGIN
 from vexrag.core.attacks.registry import AttackRegistry
 from vexrag.core.config import EvaluationConfigError
 from vexrag.core.config.build import build_evaluation_strategy
-from vexrag.core.evaluation.multi import MultiEvaluator
+from vexrag.core.evaluation.multi_evaluator import MultiEvaluator
 from vexrag.core.evaluation.protocols import EvaluationInput, EvaluationResult
 
 
@@ -78,10 +78,10 @@ def test_build_evaluation_strategy_rejects_both_evaluation_keys() -> None:
     reg.register(HIJACK_PLUGIN)
     reg.register(POISON_PLUGIN)
     cfg = {
-        "evaluation": {"strategy": "semantic_similarity"},
+        "evaluation": {"strategy": "embedding_similarity"},
         "evaluations": {
             "combine": "any",
-            "evaluators": [{"strategy": "semantic_similarity"}],
+            "evaluators": [{"strategy": "embedding_similarity"}],
         },
     }
     with pytest.raises(EvaluationConfigError, match="not both"):
@@ -109,14 +109,14 @@ def test_build_evaluation_strategy_evaluations_bundle() -> None:
             "combine": "all",
             "evaluators": [
                 {
-                    "strategy": "semantic_similarity",
+                    "strategy": "embedding_similarity",
                     "embedding_client": emb,
-                    "semantic_similarity": sem,
+                    "embedding_similarity": sem,
                 },
                 {
-                    "strategy": "semantic_similarity",
+                    "strategy": "embedding_similarity",
                     "embedding_client": emb,
-                    "semantic_similarity": {
+                    "embedding_similarity": {
                         **sem,
                         "attack_similarity_threshold": 0.7,
                     },
@@ -126,3 +126,34 @@ def test_build_evaluation_strategy_evaluations_bundle() -> None:
     }
     strat = build_evaluation_strategy(cfg, attack_id="hijackrag", registry=reg)
     assert isinstance(strat, MultiEvaluator)
+
+
+def test_build_evaluation_strategy_accepts_legacy_semantic_similarity_alias() -> None:
+    reg = AttackRegistry()
+    reg.register(HIJACK_PLUGIN)
+    reg.register(POISON_PLUGIN)
+    emb = {
+        "provider": "ollama",
+        "base_url": "http://localhost:11434",
+        "endpoint": "/api/embed",
+        "model": "m",
+    }
+    cfg = {
+        "evaluation": {
+            "strategy": "semantic_similarity",
+            "embedding_client": emb,
+            "semantic_similarity": {
+                "metric": "cosine",
+                "attack_similarity_threshold": 0.9,
+                "max_reference_similarity": 0.5,
+                "attack_margin_threshold": 0.05,
+            },
+        },
+    }
+    from vexrag.core.evaluation.embedding_similarity_evaluator import (
+        EmbeddingSimilarityEvaluator,
+    )
+
+    strat = build_evaluation_strategy(cfg, attack_id="hijackrag", registry=reg)
+    assert isinstance(strat, EmbeddingSimilarityEvaluator)
+    assert strat.attack_similarity_threshold == 0.9

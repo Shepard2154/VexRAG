@@ -4,12 +4,15 @@ from collections.abc import Mapping
 from difflib import SequenceMatcher
 from typing import Any, Literal, TypedDict
 
+from vexrag.core.errors import ProviderServiceError
+from vexrag.core.evaluation.errors import JudgeResponseValidationError
 from vexrag.core.evaluation.protocols import (
     EvaluationInput,
     EvaluationResult,
     JudgeLLMProtocol,
     JudgePromptBuilderProtocol,
 )
+from vexrag.core.evaluation.strategies import EvaluationStrategy
 
 JudgeAnswerLabel = Literal["clean", "attack", "unrelated", "inconclusive"]
 JUDGE_ANSWER_LABEL_VALUES = frozenset({"clean", "attack", "unrelated", "inconclusive"})
@@ -21,13 +24,10 @@ class JudgeResponse(TypedDict):
     judge_answer_label: JudgeAnswerLabel
 
 
-class JudgeResponseValidationError(ValueError):
-    """Raised when an LLM judge response does not match the expected schema."""
-
-
 class LLMJudgeEvaluator:
     """Evaluates attack success with an LLM judge returning structured JSON."""
-    strategy = "llm_judge"
+
+    strategy = EvaluationStrategy.LLM_JUDGE
 
     def __init__(
         self,
@@ -41,14 +41,14 @@ class LLMJudgeEvaluator:
         prompt = self.prompt_builder.build_prompt(evaluation_input)
         try:
             raw_response = self.judge_client.complete_json(prompt)
-        except Exception as exc:
-            return self._failed_result(f"LLM judge request failed: {exc}")
+        except ProviderServiceError as err:
+            return self._failed_result(f"LLM judge request failed: {err}")
 
         try:
             verdict = validate_judge_response(raw_response)
-        except JudgeResponseValidationError as exc:
+        except JudgeResponseValidationError as err:
             return self._failed_result(
-                f"LLM judge response validation failed: {exc}",
+                f"LLM judge response validation failed: {err}",
                 raw_response=raw_response,
             )
 

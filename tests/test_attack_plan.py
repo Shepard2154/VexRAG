@@ -30,7 +30,7 @@ def test_parse_single_step() -> None:
     cfg = {
         "attacks": [{"id": "alpha", "params": {"x": 1}}],
         "scan": {"repetitions": 2},
-        "evaluation": {"strategy": "semantic_similarity"},
+        "evaluation": {"strategy": "embedding_similarity"},
     }
     steps = parse_attack_steps(cfg, reg)
     assert len(steps) == 1
@@ -65,8 +65,8 @@ def test_materialize_merges_scan_and_evaluation() -> None:
             "corpus_poisoning": {"backend": "file_text", "path": "/tmp"},
         },
         "evaluation": {
-            "strategy": "semantic_similarity",
-            "semantic_similarity": {"metric": "cosine"},
+            "strategy": "embedding_similarity",
+            "embedding_similarity": {"metric": "cosine"},
         },
     }
     m = materialize_step_config(root, step)
@@ -75,7 +75,7 @@ def test_materialize_merges_scan_and_evaluation() -> None:
     assert m["scan"]["corpus_poisoning"]["backend"] == "file_text"
     assert m["scan"]["corpus_poisoning"]["filename_prefix"] == "pfx"
     assert m["evaluation"]["strategy"] == "llm_judge"
-    assert m["evaluation"]["semantic_similarity"]["metric"] == "cosine"
+    assert m["evaluation"]["embedding_similarity"]["metric"] == "cosine"
 
 
 def test_resolve_generate_cases_auto_single() -> None:
