@@ -1,6 +1,6 @@
 import pytest
 
-from vexrag.core.evaluation.llm_judge import (
+from vexrag.core.evaluation.llm_judge_evaluator import (
     JudgeResponseValidationError,
     validate_judge_response,
 )

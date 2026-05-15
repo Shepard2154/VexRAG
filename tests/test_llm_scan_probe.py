@@ -1,7 +1,7 @@
 import pytest
 
+from vexrag.core.errors import ProviderServiceError
 from vexrag.core.llm_scan_probe import _probe_complete_json
-from vexrag.core.providers.errors import ProviderServiceError
 
 
 class _FailingLLM:

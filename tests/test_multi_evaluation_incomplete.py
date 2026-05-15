@@ -1,6 +1,4 @@
-import pytest
-
-from vexrag.core.evaluation.multi import MultiEvaluator
+from vexrag.core.evaluation.multi_evaluator import MultiEvaluator
 from vexrag.core.evaluation.protocols import EvaluationInput, EvaluationResult
 
 

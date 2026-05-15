@@ -387,7 +387,7 @@ def _log_config_summary(config: Mapping[str, Any]) -> None:
 
     evaluation = config.get("evaluation")
     if isinstance(evaluation, Mapping) and not isinstance(evaluations, Mapping):
-        strategy = evaluation.get("strategy", "semantic_similarity")
+        strategy = evaluation.get("strategy", "embedding_similarity")
         LOGGER.info("Evaluation: %s", strategy)
 
 

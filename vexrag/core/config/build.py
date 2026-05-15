@@ -13,6 +13,7 @@ from vexrag.core.evaluation import (
 )
 from vexrag.core.evaluation.metrics.cosine_similarity import cosine_similarity
 from vexrag.core.evaluation.multi_evaluator import MultiEvaluator
+from vexrag.core.evaluation.strategies import EvaluationStrategy
 from vexrag.core.providers import (
     build_embedding_client as build_provider_embedding_client,
 )
@@ -317,21 +318,35 @@ def _build_faiss_corpus_poisoner(
     )
 
 
+_LEGACY_EMBEDDING_STRATEGY = frozenset({"semantic_similarity"})
+
+
+def _normalize_evaluation_strategy(strategy: str) -> str:
+    if strategy in _LEGACY_EMBEDDING_STRATEGY:
+        return EvaluationStrategy.EMBEDDING_SIMILARITY
+    return strategy
+
+
 def _build_one_evaluator(
     evaluation_config: Mapping[str, Any],
     *,
     attack_id: str,
     registry: AttackRegistry,
 ) -> EvaluationStrategyProtocol:
-    strategy = str(evaluation_config.get("strategy", "semantic_similarity")).strip()
-    if strategy == "semantic_similarity":
-        return _build_semantic_similarity(evaluation_config)
-    if strategy == "llm_judge":
+    strategy = _normalize_evaluation_strategy(
+        str(
+            evaluation_config.get("strategy", EvaluationStrategy.EMBEDDING_SIMILARITY)
+        ).strip()
+    )
+    if strategy == EvaluationStrategy.EMBEDDING_SIMILARITY:
+        return _build_embedding_similarity(evaluation_config)
+    if strategy == EvaluationStrategy.LLM_JUDGE:
         return _build_llm_judge(
             evaluation_config, attack_id=attack_id, registry=registry
         )
     raise EvaluationConfigError(
-        "evaluation.strategy must be one of: semantic_similarity, llm_judge"
+        "evaluation.strategy must be one of: "
+        f"{EvaluationStrategy.EMBEDDING_SIMILARITY}, {EvaluationStrategy.LLM_JUDGE}"
     )
 
 
@@ -400,13 +415,17 @@ def attack_llm_client_section(
     return client_config
 
 
-def _build_semantic_similarity(
+def _build_embedding_similarity(
     evaluation_config: Mapping[str, Any],
 ) -> EmbeddingSimilarityEvaluator:
-    strategy_config = _strategy_section(evaluation_config, "semantic_similarity")
+    strategy_config = _strategy_section(
+        evaluation_config, EvaluationStrategy.EMBEDDING_SIMILARITY
+    )
     metric_name = str(strategy_config.get("metric", "cosine")).strip()
     if metric_name != "cosine":
-        raise EvaluationConfigError("semantic_similarity.metric must be 'cosine'")
+        raise EvaluationConfigError(
+            f"{EvaluationStrategy.EMBEDDING_SIMILARITY}.metric must be 'cosine'"
+        )
 
     embedding_config = _client_section(
         strategy_config,
@@ -414,7 +433,7 @@ def _build_semantic_similarity(
         "embedding_client",
     )
     strategy_config_accessor = ConfigAccessor(
-        strategy_config, prefix="evaluation.semantic_similarity"
+        strategy_config, prefix=f"evaluation.{EvaluationStrategy.EMBEDDING_SIMILARITY}"
     )
     return EmbeddingSimilarityEvaluator(
         embedding_client=build_provider_embedding_client(embedding_config),
@@ -437,7 +456,7 @@ def _build_llm_judge(
     attack_id: str,
     registry: AttackRegistry,
 ) -> LLMJudgeEvaluator:
-    strategy_config = _strategy_section(evaluation_config, "llm_judge")
+    strategy_config = _strategy_section(evaluation_config, EvaluationStrategy.LLM_JUDGE)
     judge_config = _client_section(strategy_config, evaluation_config, "judge_client")
     prompt_builder = _resolve_judge_prompt_builder(registry, attack_id)
     return LLMJudgeEvaluator(
@@ -477,7 +496,11 @@ def _strategy_section(
     evaluation_config: Mapping[str, Any],
     strategy: str,
 ) -> Mapping[str, Any]:
-    nested = evaluation_config.get(strategy, {})
+    nested = evaluation_config.get(strategy)
+    if strategy == EvaluationStrategy.EMBEDDING_SIMILARITY and not nested:
+        nested = evaluation_config.get("semantic_similarity")
+    if nested is None:
+        nested = {}
     if not isinstance(nested, Mapping):
         raise EvaluationConfigError(f"evaluation.{strategy} must be a mapping")
     return nested
