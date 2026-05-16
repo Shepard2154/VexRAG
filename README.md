@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/Shepard2154/VexRAG"><img src="https://img.shields.io/badge/project-in%20development-F59E0B?style=flat-square" alt="Project: in development" height="28"></a>
-  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.11+-blue?style=flat-square" alt="Python 3.11+" height="28"></a>
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.11-blue?style=flat-square" alt="Python 3.11" height="28"></a>
   <a href="https://pepy.tech/projects/vexrag"><img src="https://static.pepy.tech/personalized-badge/vexrag?period=total&units=ABBREVIATION&left_color=BLACK&right_color=GREEN&left_text=downloads" alt="PyPI Downloads" height="28"></a>
   <a href="https://t.me/vexrag"><img src="https://img.shields.io/badge/chat-join-blue?style=flat-square&logo=telegram" alt="Telegram chat" height="28"></a>
 </p>
