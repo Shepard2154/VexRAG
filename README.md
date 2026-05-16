@@ -2,9 +2,12 @@
   <img src="assets/logo.png" alt="VexRAG" width="300">
 </p>
 
-<div align="center">
-[![Project: in development](https://img.shields.io/badge/project-in%20development-F59E0B?style=flat-square)](https://github.com/Shepard2154/VexRAG) [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue?style=flat-square)](https://www.python.org/) [![PyPI Downloads](https://static.pepy.tech/personalized-badge/vexrag?period=total&units=ABBREVIATION&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/vexrag) [![Telegram chat](https://img.shields.io/badge/chat-join-blue?style=flat-square&logo=telegram)](https://t.me/vexrag)
-</div>
+<p align="center">
+  <a href="https://github.com/Shepard2154/VexRAG"><img src="https://img.shields.io/badge/project-in%20development-F59E0B?style=flat-square" alt="Project: in development" height="28"></a>
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.11+-blue?style=flat-square" alt="Python 3.11+" height="28"></a>
+  <a href="https://pepy.tech/projects/vexrag"><img src="https://static.pepy.tech/personalized-badge/vexrag?period=total&units=ABBREVIATION&left_color=BLACK&right_color=GREEN&left_text=downloads" alt="PyPI Downloads" height="28"></a>
+  <a href="https://t.me/vexrag"><img src="https://img.shields.io/badge/chat-join-blue?style=flat-square&logo=telegram" alt="Telegram chat" height="28"></a>
+</p>
 
 Most RAG security tools focus on jailbreaking or prompt injection. VexRAG is different: it injects poisoned passages directly into the retrieval index and measures whether the system’s answers remain factually correct. It is not about safety refusals — it’s about functional correctness under adversarial data manipulation.
 
@@ -18,7 +21,7 @@ Most RAG security tools focus on jailbreaking or prompt injection. VexRAG is dif
 ### Prerequisites
 
 ```bash
-python --version  # requires 3.11+
+python --version  # requires 3.11
 ollama list
 ```
 
