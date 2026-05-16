@@ -1,4 +1,6 @@
-# VexRAG
+<p align="center">
+  <img src="assets/logo.png" alt="VexRAG">
+</p>
 
 ![Project: in development](https://img.shields.io/badge/project-in%20development-F59E0B?style=for-the-badge)
 [![PyPI Downloads](https://static.pepy.tech/personalized-badge/vexrag?period=total&units=ABBREVIATION&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/vexrag)
