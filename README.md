@@ -2,8 +2,10 @@
   <img src="assets/logo.png" alt="VexRAG">
 </p>
 
-![Project: in development](https://img.shields.io/badge/project-in%20development-F59E0B?style=for-the-badge)
-[![PyPI Downloads](https://static.pepy.tech/personalized-badge/vexrag?period=total&units=ABBREVIATION&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/vexrag)
+<p align="center">
+  <a href="https://github.com/Shepard2154/VexRAG"><img src="https://img.shields.io/badge/project-in%20development-F59E0B?style=for-the-badge" alt="Project: in development" height="28"></a>
+  <a href="https://pepy.tech/projects/vexrag"><img src="https://static.pepy.tech/personalized-badge/vexrag?period=total&units=ABBREVIATION&left_color=BLACK&right_color=GREEN&left_text=downloads" alt="PyPI Downloads" height="28"></a>
+</p>
 
 Most RAG security tools focus on jailbreaking or prompt injection. VexRAG is different: it injects poisoned passages directly into the retrieval index and measures whether the system’s answers remain factually correct. It is not about safety refusals — it’s about functional correctness under adversarial data manipulation.
 
