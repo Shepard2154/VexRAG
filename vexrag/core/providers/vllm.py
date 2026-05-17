@@ -1,11 +1,19 @@
-import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
 
+from vexrag.core.providers.common import coerce_embedding, post_json
+from vexrag.core.providers.config_accessor import ProviderConfigAccessor
 from vexrag.core.providers.errors import ProviderConfigError, ProviderServiceError
+
+_DEFAULT_API_KEY = "vllm-local"
+
+
+def _normalize_api_key(api_key: str | None) -> str:
+    if api_key is None:
+        return _DEFAULT_API_KEY
+    stripped = api_key.strip()
+    return stripped or _DEFAULT_API_KEY
 
 
 @dataclass(frozen=True, slots=True)
@@ -13,7 +21,7 @@ class VLLMEmbeddingClientConfig:
     model: str
     base_url: str
     endpoint: str
-    api_key: str
+    api_key: str = _DEFAULT_API_KEY
     timeout: float | None = 30.0
 
     def __post_init__(self) -> None:
@@ -23,21 +31,18 @@ class VLLMEmbeddingClientConfig:
             raise ProviderConfigError("embedding_client.base_url is required")
         if not self.endpoint:
             raise ProviderConfigError("embedding_client.endpoint is required")
-        if not self.api_key:
-            raise ProviderConfigError("embedding_client.api_key is required")
+        object.__setattr__(self, "api_key", _normalize_api_key(self.api_key))
         if self.timeout is not None and self.timeout <= 0:
             raise ProviderConfigError("embedding_client.timeout must be greater than 0")
 
 
 class VLLMEmbeddingClient:
-    __slots__ = ("_config",)
-
     def __init__(
         self,
         model: str,
         base_url: str,
         endpoint: str,
-        api_key: str = "ANYTHING",
+        api_key: str = _DEFAULT_API_KEY,
         timeout: float | None = 30.0,
     ) -> None:
         self._config = VLLMEmbeddingClientConfig(
@@ -70,7 +75,7 @@ class VLLMEmbeddingClient:
 
     def embed_texts(self, texts: Sequence[str]) -> Sequence[Sequence[float]]:
         payload = {"model": self.model, "input": list(texts)}
-        response = _post_vllm_json(
+        response = post_json(
             base_url=self.base_url,
             endpoint=self.endpoint,
             api_key=self.api_key,
@@ -90,7 +95,7 @@ class VLLMEmbeddingClient:
                     "vLLM embedding response items must be objects"
                 )
             embedding = item.get("embedding")
-            vectors.append(_coerce_embedding(embedding))
+            vectors.append(coerce_embedding(embedding))
         return tuple(vectors)
 
 
@@ -99,7 +104,7 @@ class VLLMJudgeClientConfig:
     model: str
     base_url: str
     endpoint: str
-    api_key: str
+    api_key: str = _DEFAULT_API_KEY
     timeout: float | None = 60.0
     temperature: float = 0.0
 
@@ -110,21 +115,18 @@ class VLLMJudgeClientConfig:
             raise ProviderConfigError("judge_client.base_url is required")
         if not self.endpoint:
             raise ProviderConfigError("judge_client.endpoint is required")
-        if not self.api_key:
-            raise ProviderConfigError("judge_client.api_key is required")
+        object.__setattr__(self, "api_key", _normalize_api_key(self.api_key))
         if self.timeout is not None and self.timeout <= 0:
             raise ProviderConfigError("judge_client.timeout must be greater than 0")
 
 
 class VLLMJudgeClient:
-    __slots__ = ("_config",)
-
     def __init__(
         self,
         model: str,
         base_url: str,
         endpoint: str,
-        api_key: str = "ANYTHING",
+        api_key: str = _DEFAULT_API_KEY,
         timeout: float | None = 60.0,
         temperature: float = 0.0,
     ) -> None:
@@ -168,7 +170,7 @@ class VLLMJudgeClient:
             "temperature": self.temperature,
             "response_format": {"type": "json_object"},
         }
-        response = _post_vllm_json(
+        response = post_json(
             base_url=self.base_url,
             endpoint=self.endpoint,
             api_key=self.api_key,
@@ -198,114 +200,23 @@ class VLLMJudgeClient:
 
 
 def build_embedding_client(config: Mapping[str, Any]) -> VLLMEmbeddingClient:
+    config_accessor = ProviderConfigAccessor(config, prefix="embedding_client")
     return VLLMEmbeddingClient(
-        model=_required_string(config, "model", "embedding_client"),
-        base_url=_required_string(config, "base_url", "embedding_client").rstrip("/"),
-        endpoint=_required_string(config, "endpoint", "embedding_client"),
-        api_key=_optional_string_option(config, "api_key", "ANYTHING"),
-        timeout=_optional_float_option(config, "timeout", 30.0),
+        model=config_accessor.get_required_string("model"),
+        base_url=config_accessor.get_required_string("base_url").rstrip("/"),
+        endpoint=config_accessor.get_required_string("endpoint"),
+        api_key=_normalize_api_key(config_accessor.get_optional_string("api_key")),
+        timeout=config_accessor.get_optional_float("timeout", 30.0),
     )
 
 
 def build_judge_client(config: Mapping[str, Any]) -> VLLMJudgeClient:
+    config_accessor = ProviderConfigAccessor(config, prefix="judge_client")
     return VLLMJudgeClient(
-        model=_required_string(config, "model", "judge_client"),
-        base_url=_required_string(config, "base_url", "judge_client").rstrip("/"),
-        endpoint=_required_string(config, "endpoint", "judge_client"),
-        api_key=_optional_string_option(config, "api_key", "ANYTHING"),
-        timeout=_optional_float_option(config, "timeout", 60.0),
-        temperature=_float_option(config, "temperature", 0.0),
+        model=config_accessor.get_required_string("model"),
+        base_url=config_accessor.get_required_string("base_url").rstrip("/"),
+        endpoint=config_accessor.get_required_string("endpoint"),
+        api_key=_normalize_api_key(config_accessor.get_optional_string("api_key")),
+        timeout=config_accessor.get_optional_float("timeout", 60.0),
+        temperature=config_accessor.get_float("temperature", 0.0),
     )
-
-
-def _float_option(config: Mapping[str, Any], key: str, default: float) -> float:
-    value = config.get(key, default)
-    if isinstance(value, bool):
-        raise ProviderConfigError(f"{key} must be a number")
-    try:
-        return float(value)
-    except (TypeError, ValueError) as exc:
-        raise ProviderConfigError(f"{key} must be a number") from exc
-
-
-def _optional_float_option(
-    config: Mapping[str, Any],
-    key: str,
-    default: float,
-) -> float | None:
-    value = config.get(key, default)
-    if value is None:
-        return None
-    if isinstance(value, bool):
-        raise ProviderConfigError(f"{key} must be a number or null")
-    try:
-        return float(value)
-    except (TypeError, ValueError) as exc:
-        raise ProviderConfigError(f"{key} must be a number or null") from exc
-
-
-def _required_string(config: Mapping[str, Any], key: str, prefix: str) -> str:
-    value = config.get(key)
-    if not isinstance(value, str) or not value.strip():
-        raise ProviderConfigError(f"{prefix}.{key} is required")
-    return value.strip()
-
-
-def _optional_string_option(config: Mapping[str, Any], key: str, default: str) -> str:
-    value = config.get(key, default)
-    if not isinstance(value, str) or not value.strip():
-        raise ProviderConfigError(f"{key} must be a non-empty string")
-    return value.strip()
-
-
-def _post_vllm_json(
-    *,
-    base_url: str,
-    endpoint: str,
-    api_key: str,
-    payload: Mapping[str, Any],
-    timeout: float | None,
-    service_name: str,
-) -> Mapping[str, Any]:
-    url = f"{base_url.rstrip('/')}/{endpoint.lstrip('/')}"
-    request = Request(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
-        },
-        method="POST",
-    )
-    try:
-        with urlopen(request, timeout=timeout) as response:
-            raw_body = response.read()
-    except HTTPError as error:
-        body = error.read().decode("utf-8", errors="replace")
-        raise ProviderServiceError(
-            f"{service_name} request returned HTTP {error.code}: {body}"
-        ) from error
-    except URLError as error:
-        raise ProviderServiceError(
-            f"{service_name} request failed: {error.reason}"
-        ) from error
-
-    try:
-        decoded = json.loads(raw_body.decode("utf-8"))
-    except json.JSONDecodeError as error:
-        raise ProviderServiceError(
-            f"{service_name} response was not valid JSON"
-        ) from error
-    if not isinstance(decoded, Mapping):
-        raise ProviderServiceError(f"{service_name} response must be a JSON object")
-    return decoded
-
-
-def _coerce_embedding(vector: object) -> tuple[float, ...]:
-    if not isinstance(vector, Sequence) or isinstance(vector, str | bytes):
-        raise ProviderServiceError("embedding response items must be numeric lists")
-    try:
-        return tuple(float(value) for value in vector)
-    except (TypeError, ValueError) as exc:
-        raise ProviderServiceError("embedding values must be numeric") from exc

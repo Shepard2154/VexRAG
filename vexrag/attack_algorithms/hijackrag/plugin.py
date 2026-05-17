@@ -16,7 +16,7 @@ from vexrag.attack_algorithms.hijackrag.segments import default_hijack_segments_
 from vexrag.core.attacks.command import ConfiguredScanCommand
 from vexrag.core.attacks.plugin import AttackPlugin, GenerateCasesParams
 from vexrag.core.attacks.registry import AttackRegistry
-from vexrag.core.config import ScanConfigError
+from vexrag.core.config import ScanConfigAccessor, ScanConfigError
 from vexrag.core.config.build import (
     attack_llm_client_section,
     attack_section,
@@ -29,7 +29,6 @@ from vexrag.core.config.build import (
     load_case_configs,
     path_strings_from_value,
 )
-from vexrag.core.config.options import ConfigAccessor
 from vexrag.core.json_generation_client import JSONGenerationLLMClientAdapter
 from vexrag.core.providers import build_judge_client as build_provider_judge_client
 from vexrag.core.target import HTTPTargetSystemAdapter
@@ -161,8 +160,10 @@ def _build_hijackrag_request(
     insert_raw = case_config.get("hijack_insert", case_config.get("insert_prompt"))
     if not isinstance(insert_raw, str) or not insert_raw.strip():
         raise ScanConfigError(f"{prefix}.hijack_insert is required")
-    case_config_accessor = ConfigAccessor(case_config, prefix=prefix)
-    attack_config_accessor = ConfigAccessor(attack_config, prefix="attack.hijackrag")
+    case_config_accessor = ScanConfigAccessor(case_config, prefix=prefix)
+    attack_config_accessor = ScanConfigAccessor(
+        attack_config, prefix="attack.hijackrag"
+    )
     return HijackRAGRequest(
         query=case_config_accessor.get_required_string("query"),
         hijack_insert=insert_raw.strip(),
@@ -218,7 +219,7 @@ def build_hijackrag_scan_config(config: Mapping[str, Any]) -> HijackRAGScanConfi
     scan_config = config.get("scan", {})
     if not isinstance(scan_config, Mapping):
         raise ScanConfigError("scan must be a mapping")
-    scan_config_accessor = ConfigAccessor(scan_config, prefix="scan")
+    scan_config_accessor = ScanConfigAccessor(scan_config, prefix="scan")
     return HijackRAGScanConfig(
         repetitions=scan_config_accessor.get_optional_int("repetitions", 1),
         attack_success_rate_threshold=scan_config_accessor.get_optional_float(

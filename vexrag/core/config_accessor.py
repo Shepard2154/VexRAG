@@ -2,32 +2,32 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, TypeVar
 
-from .errors import ScanConfigError
+from vexrag.core.errors import ConfigError
 
 _Number = TypeVar("_Number", float, int)
 
 
 def _reject_bool(value: Any, error_message: str) -> None:
     if isinstance(value, bool):
-        raise ScanConfigError(error_message)
+        raise ConfigError(error_message)
 
 
 def _safe_cast(value: Any, cast_to: type, error_message: str) -> Any:
     try:
         return cast_to(value)
     except (TypeError, ValueError) as err:
-        raise ScanConfigError(error_message) from err
+        raise ConfigError(error_message) from err
 
 
 class ConfigAccessor:
     def __init__(
         self, config: Mapping[str, Any], prefix: str = "", base_dir: Path | None = None
-    ):
+    ) -> None:
         self.config = config
         self.prefix = prefix
         self.base_dir = base_dir
 
-    def _field_path(self, option_name: str):
+    def _field_path(self, option_name: str) -> str:
         return f"{self.prefix}.{option_name}" if self.prefix else option_name
 
     def _cast_number(
@@ -73,14 +73,14 @@ class ConfigAccessor:
         raw_value = self.config.get(option_name, default_value)
         field_path = self._field_path(option_name)
         if not isinstance(raw_value, bool):
-            raise ScanConfigError(f"{field_path} must be a boolean")
+            raise ConfigError(f"{field_path} must be a boolean")
         return raw_value
 
     def get_required_string(self, option_name: str) -> str:
         raw_value = self.config.get(option_name)
         field_path = self._field_path(option_name)
         if not isinstance(raw_value, str) or not raw_value.strip():
-            raise ScanConfigError(f"{field_path} must be a non-empty string")
+            raise ConfigError(f"{field_path} must be a non-empty string")
         return raw_value.strip()
 
     def get_optional_string(
@@ -91,7 +91,7 @@ class ConfigAccessor:
             return None
         field_path = self._field_path(option_name)
         if not isinstance(raw_value, str):
-            raise ScanConfigError(f"{field_path} must be a string")
+            raise ConfigError(f"{field_path} must be a string")
         stripped = raw_value.strip()
         return stripped or None
 
@@ -101,14 +101,14 @@ class ConfigAccessor:
         raw_value = self.config.get(option_name, default_value)
         field_path = self._field_path(option_name)
         if not isinstance(raw_value, Mapping):
-            raise ScanConfigError(f"{field_path} must be a mapping")
+            raise ConfigError(f"{field_path} must be a mapping")
         return raw_value
 
     def get_string_mapping(self, option_name: str) -> Mapping[str, str]:
         raw_value = self.config.get(option_name, {})
         field_path = self._field_path(option_name)
         if not isinstance(raw_value, Mapping):
-            raise ScanConfigError(f"{field_path} must be a mapping")
+            raise ConfigError(f"{field_path} must be a mapping")
         return {str(name): str(item) for name, item in raw_value.items()}
 
     def get_path(self, *option_names: str) -> Path:
@@ -120,4 +120,4 @@ class ConfigAccessor:
                     path = self.base_dir / path
                 return path
         expected = ", ".join(option_names)
-        raise ScanConfigError(f"{self.prefix} must configure one of: {expected}")
+        raise ConfigError(f"{self.prefix} must configure one of: {expected}")

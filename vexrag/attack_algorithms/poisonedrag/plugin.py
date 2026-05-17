@@ -17,7 +17,7 @@ from vexrag.attack_algorithms.poisonedrag.schema import PoisonedRAGRequest
 from vexrag.core.attacks.command import ConfiguredScanCommand
 from vexrag.core.attacks.plugin import AttackPlugin, GenerateCasesParams
 from vexrag.core.attacks.registry import AttackRegistry
-from vexrag.core.config import ScanConfigError
+from vexrag.core.config import ScanConfigAccessor, ScanConfigError
 from vexrag.core.config.build import (
     attack_llm_client_section,
     attack_section,
@@ -31,7 +31,6 @@ from vexrag.core.config.build import (
     poisoning_style_option,
     target_style_option,
 )
-from vexrag.core.config.options import ConfigAccessor
 from vexrag.core.json_generation_client import JSONGenerationLLMClientAdapter
 from vexrag.core.providers import build_judge_client as build_provider_judge_client
 from vexrag.core.target import HTTPTargetSystemAdapter
@@ -105,8 +104,10 @@ def _build_poisonedrag_request(
     case_number: int,
 ) -> PoisonedRAGRequest:
     prefix = f"attack.poisonedrag.cases[{case_number}]"
-    case_config_accessor = ConfigAccessor(case_config, prefix=prefix)
-    attack_config_accessor = ConfigAccessor(attack_config, prefix="attack.poisonedrag")
+    case_config_accessor = ScanConfigAccessor(case_config, prefix=prefix)
+    attack_config_accessor = ScanConfigAccessor(
+        attack_config, prefix="attack.poisonedrag"
+    )
     return PoisonedRAGRequest(
         query=case_config_accessor.get_required_string("query"),
         correct_answer=case_config_accessor.get_optional_string("correct_answer"),
@@ -165,7 +166,7 @@ def build_poisonedrag_scan_config(config: Mapping[str, Any]) -> PoisonedRAGScanC
     scan_config = config.get("scan", {})
     if not isinstance(scan_config, Mapping):
         raise ScanConfigError("scan must be a mapping")
-    scan_config_accessor = ConfigAccessor(scan_config, prefix="scan")
+    scan_config_accessor = ScanConfigAccessor(scan_config, prefix="scan")
     return PoisonedRAGScanConfig(
         repetitions=scan_config_accessor.get_optional_int("repetitions", 1),
         attack_success_rate_threshold=scan_config_accessor.get_optional_float(

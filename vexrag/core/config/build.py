@@ -40,7 +40,7 @@ from vexrag.core.target import (
 )
 
 from .errors import EvaluationConfigError, ScanConfigError
-from .options import ConfigAccessor
+from .scan_accessor import ScanConfigAccessor
 
 
 def attack_section(config: Mapping[str, Any], attack_name: str) -> Mapping[str, Any]:
@@ -62,12 +62,12 @@ def build_target_system(config: Mapping[str, Any]) -> HTTPTargetSystemAdapter:
     http_config = target_config.get("http", target_config)
     if not isinstance(http_config, Mapping):
         raise ScanConfigError("target_system.http must be a mapping")
-    http_config_accessor = ConfigAccessor(http_config, prefix="target_system.http")
+    http_config_accessor = ScanConfigAccessor(http_config, prefix="target_system.http")
 
     scan_raw = config.get("scan", {})
     include_raw_payload = False
     if isinstance(scan_raw, Mapping):
-        scan_accessor = ConfigAccessor(scan_raw, prefix="scan")
+        scan_accessor = ScanConfigAccessor(scan_raw, prefix="scan")
         include_raw_payload = scan_accessor.get_bool(
             "debug_include_raw_target_response",
             False,
@@ -108,7 +108,7 @@ def build_corpus_poisoner(
     if not isinstance(poison_config, Mapping):
         raise ScanConfigError("scan.corpus_poisoning must be a mapping")
 
-    poison_config_accessor = ConfigAccessor(
+    poison_config_accessor = ScanConfigAccessor(
         poison_config, prefix="scan.corpus_poisoning", base_dir=base_dir
     )
 
@@ -219,7 +219,7 @@ def _build_qdrant_corpus_poisoner(
     base_dir: Path | None,
 ) -> QdrantPoisoner:
     prefix = "scan.corpus_poisoning.qdrant"
-    qdrant_config_accessor = ConfigAccessor(
+    qdrant_config_accessor = ScanConfigAccessor(
         backend_cfg, prefix="scan.corpus_poisoning.qdrant"
     )
     url = qdrant_config_accessor.get_optional_string("url")
@@ -257,7 +257,7 @@ def _build_chroma_corpus_poisoner(
     base_dir: Path | None,
 ) -> ChromaPoisoner:
     prefix = "scan.corpus_poisoning.chroma"
-    chroma_config_accessor = ConfigAccessor(
+    chroma_config_accessor = ScanConfigAccessor(
         backend_cfg, prefix="scan.corpus_poisoning.chroma"
     )
     host = chroma_config_accessor.get_optional_string("host")
@@ -296,7 +296,7 @@ def _build_faiss_corpus_poisoner(
     base_dir: Path | None,
 ) -> FaissPoisoner:
     prefix = "scan.corpus_poisoning.faiss"
-    faiss_config_accessor = ConfigAccessor(
+    faiss_config_accessor = ScanConfigAccessor(
         backend_cfg, prefix="scan.corpus_poisoning.faiss"
     )
     faiss_dir = faiss_config_accessor.get_path(
@@ -485,7 +485,7 @@ def _build_embedding_similarity_evaluator(
         evaluation_config,
         "embedding_client",
     )
-    strategy_config_accessor = ConfigAccessor(
+    strategy_config_accessor = ScanConfigAccessor(
         strategy_config, prefix=f"evaluation.{EvaluationStrategy.EMBEDDING_SIMILARITY}"
     )
     return EmbeddingSimilarityEvaluator(
@@ -654,7 +654,7 @@ def cleanup_option(scan_config: Mapping[str, Any]) -> bool:
         return False
     if not isinstance(poison_config, Mapping):
         raise ScanConfigError("scan.corpus_poisoning must be a mapping")
-    poison_config_accessor = ConfigAccessor(
+    poison_config_accessor = ScanConfigAccessor(
         poison_config, prefix="scan.corpus_poisoning"
     )
     return poison_config_accessor.get_bool("cleanup", False)
