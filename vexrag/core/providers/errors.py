@@ -1,4 +1,7 @@
-class ProviderConfigError(ValueError):
+from vexrag.core.errors import ConfigError
+
+
+class ProviderConfigError(ConfigError):
     """Raised when provider configuration is missing or invalid."""
 
 

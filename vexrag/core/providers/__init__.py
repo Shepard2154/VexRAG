@@ -13,11 +13,16 @@ from vexrag.core.providers.ollama import (
 from vexrag.core.providers.ollama import (
     build_judge_client as build_ollama_judge_client,
 )
-from vexrag.core.providers.vllm import VLLMEmbeddingClient, VLLMJudgeClient
+from vexrag.core.providers.vllm import (
+    VLLMEmbeddingClient,
+    VLLMJudgeClient,
+)
 from vexrag.core.providers.vllm import (
     build_embedding_client as build_vllm_embedding_client,
 )
-from vexrag.core.providers.vllm import build_judge_client as build_vllm_judge_client
+from vexrag.core.providers.vllm import (
+    build_judge_client as build_vllm_judge_client,
+)
 
 
 def build_embedding_client(config: Mapping[str, Any]) -> EmbeddingClient:
