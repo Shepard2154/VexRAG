@@ -26,8 +26,6 @@ class OllamaEmbeddingClientConfig:
 
 
 class OllamaEmbeddingClient:
-    __slots__ = ("_config",)
-
     def __init__(
         self,
         model: str,
@@ -96,8 +94,6 @@ class OllamaJudgeClientConfig:
 
 
 class OllamaJudgeClient:
-    __slots__ = ("_config",)
-
     def __init__(
         self,
         model: str,

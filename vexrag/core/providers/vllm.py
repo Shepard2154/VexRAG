@@ -6,13 +6,22 @@ from vexrag.core.providers.common import coerce_embedding, post_json
 from vexrag.core.providers.config_accessor import ProviderConfigAccessor
 from vexrag.core.providers.errors import ProviderConfigError, ProviderServiceError
 
+_DEFAULT_API_KEY = "vllm-local"
+
+
+def _normalize_api_key(api_key: str | None) -> str:
+    if api_key is None:
+        return _DEFAULT_API_KEY
+    stripped = api_key.strip()
+    return stripped or _DEFAULT_API_KEY
+
 
 @dataclass(frozen=True, slots=True)
 class VLLMEmbeddingClientConfig:
     model: str
     base_url: str
     endpoint: str
-    api_key: str
+    api_key: str = _DEFAULT_API_KEY
     timeout: float | None = 30.0
 
     def __post_init__(self) -> None:
@@ -22,21 +31,18 @@ class VLLMEmbeddingClientConfig:
             raise ProviderConfigError("embedding_client.base_url is required")
         if not self.endpoint:
             raise ProviderConfigError("embedding_client.endpoint is required")
-        if not self.api_key:
-            raise ProviderConfigError("embedding_client.api_key is required")
+        object.__setattr__(self, "api_key", _normalize_api_key(self.api_key))
         if self.timeout is not None and self.timeout <= 0:
             raise ProviderConfigError("embedding_client.timeout must be greater than 0")
 
 
 class VLLMEmbeddingClient:
-    __slots__ = ("_config",)
-
     def __init__(
         self,
         model: str,
         base_url: str,
         endpoint: str,
-        api_key: str = "ANYTHING",
+        api_key: str = _DEFAULT_API_KEY,
         timeout: float | None = 30.0,
     ) -> None:
         self._config = VLLMEmbeddingClientConfig(
@@ -98,7 +104,7 @@ class VLLMJudgeClientConfig:
     model: str
     base_url: str
     endpoint: str
-    api_key: str
+    api_key: str = _DEFAULT_API_KEY
     timeout: float | None = 60.0
     temperature: float = 0.0
 
@@ -109,21 +115,18 @@ class VLLMJudgeClientConfig:
             raise ProviderConfigError("judge_client.base_url is required")
         if not self.endpoint:
             raise ProviderConfigError("judge_client.endpoint is required")
-        if not self.api_key:
-            raise ProviderConfigError("judge_client.api_key is required")
+        object.__setattr__(self, "api_key", _normalize_api_key(self.api_key))
         if self.timeout is not None and self.timeout <= 0:
             raise ProviderConfigError("judge_client.timeout must be greater than 0")
 
 
 class VLLMJudgeClient:
-    __slots__ = ("_config",)
-
     def __init__(
         self,
         model: str,
         base_url: str,
         endpoint: str,
-        api_key: str = "ANYTHING",
+        api_key: str = _DEFAULT_API_KEY,
         timeout: float | None = 60.0,
         temperature: float = 0.0,
     ) -> None:
@@ -202,7 +205,7 @@ def build_embedding_client(config: Mapping[str, Any]) -> VLLMEmbeddingClient:
         model=config_accessor.get_required_string("model"),
         base_url=config_accessor.get_required_string("base_url").rstrip("/"),
         endpoint=config_accessor.get_required_string("endpoint"),
-        api_key=config_accessor.get_optional_string("api_key", "ANYTHING") or "",
+        api_key=_normalize_api_key(config_accessor.get_optional_string("api_key")),
         timeout=config_accessor.get_optional_float("timeout", 30.0),
     )
 
@@ -213,7 +216,7 @@ def build_judge_client(config: Mapping[str, Any]) -> VLLMJudgeClient:
         model=config_accessor.get_required_string("model"),
         base_url=config_accessor.get_required_string("base_url").rstrip("/"),
         endpoint=config_accessor.get_required_string("endpoint"),
-        api_key=config_accessor.get_optional_string("api_key", "ANYTHING") or "",
+        api_key=_normalize_api_key(config_accessor.get_optional_string("api_key")),
         timeout=config_accessor.get_optional_float("timeout", 60.0),
         temperature=config_accessor.get_float("temperature", 0.0),
     )
