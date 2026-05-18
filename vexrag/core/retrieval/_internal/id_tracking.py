@@ -1,7 +1,7 @@
 from collections.abc import Iterable, MutableSet, Sequence
 
 
-def created_document_ids_for_cleanup(
+def collect_created_document_ids_for_cleanup(
     document_ids: Sequence[str],
     created_document_ids: set[str],
 ) -> tuple[str, ...]:

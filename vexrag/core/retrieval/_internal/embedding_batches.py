@@ -3,8 +3,8 @@ from dataclasses import dataclass
 
 from vexrag.core.evaluation import EmbeddingClient
 
-from .embeddings import embed_text_vectors
-from .text_inputs import nonempty_stripped_texts
+from .embedding_vectors import embed_text_vectors
+from .text_normalization import normalized_nonempty_texts
 
 
 @dataclass(frozen=True)
@@ -13,13 +13,13 @@ class EmbeddedTextBatch:
     vectors: list[list[float]]
 
 
-def embedded_text_batch(
+def build_embedded_text_batch(
     embedding_client: EmbeddingClient,
     texts: Sequence[str],
     *,
     l2_normalize: bool,
 ) -> EmbeddedTextBatch | None:
-    stripped_texts = tuple(nonempty_stripped_texts(texts))
+    stripped_texts = tuple(normalized_nonempty_texts(texts))
     if not stripped_texts:
         return None
     vectors = embed_text_vectors(

@@ -30,10 +30,6 @@ from vexrag.core.providers import (
     build_judge_client,
 )
 from vexrag.core.retrieval import (
-    ChromaCorpusAdapter,
-    FaissCorpusAdapter,
-    FileTextCorpusAdapter,
-    QdrantCorpusAdapter,
     RetrievalBackend,
     RetrievalCorpusAdapter,
     RetrievalCorpusError,
@@ -82,10 +78,6 @@ __all__ = [
     "build_embedding_client",
     "build_judge_client",
     # Retrieval
-    "ChromaCorpusAdapter",
-    "FaissCorpusAdapter",
-    "FileTextCorpusAdapter",
-    "QdrantCorpusAdapter",
     "RetrievalBackend",
     "RetrievalCorpusAdapter",
     "RetrievalCorpusError",

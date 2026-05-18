@@ -6,12 +6,12 @@ from typing import Any
 from uuid import uuid4
 
 from vexrag.core.evaluation import EmbeddingClient
-from vexrag.core.retrieval.document_ids import (
-    created_document_ids_for_cleanup,
+from vexrag.core.retrieval._internal.embedding_batches import build_embedded_text_batch
+from vexrag.core.retrieval._internal.id_tracking import (
+    collect_created_document_ids_for_cleanup,
     forget_created_document_ids,
     remember_created_document_ids,
 )
-from vexrag.core.retrieval.embedding_inputs import embedded_text_batch
 from vexrag.core.retrieval.errors import (
     RetrievalCorpusBackendError,
     RetrievalCorpusDependencyError,
@@ -207,7 +207,7 @@ class FaissCorpusAdapter:
         texts: Sequence[str],
         metadata: Mapping[str, Any],
     ) -> tuple[str, ...]:
-        batch = embedded_text_batch(
+        batch = build_embedded_text_batch(
             self._embedding_client,
             texts,
             l2_normalize=self._l2_normalize,
@@ -262,7 +262,7 @@ class FaissCorpusAdapter:
         return tuple(new_ids)
 
     def delete_texts(self, document_ids: Sequence[str]) -> None:
-        to_remove = created_document_ids_for_cleanup(
+        to_remove = collect_created_document_ids_for_cleanup(
             document_ids, self._created_document_ids
         )
         if not to_remove:

@@ -26,13 +26,12 @@ from vexrag.core.providers import (
 from vexrag.core.providers import (
     build_judge_client as build_provider_judge_client,
 )
-from vexrag.core.retrieval import (
+from vexrag.core.retrieval import RetrievalBackend, RetrievalCorpusAdapter
+from vexrag.core.retrieval.adapters import (
     ChromaCorpusAdapter,
     FaissCorpusAdapter,
     FileTextCorpusAdapter,
     QdrantCorpusAdapter,
-    RetrievalBackend,
-    RetrievalCorpusAdapter,
 )
 from vexrag.core.target import (
     HTTPTargetSystemAdapter,

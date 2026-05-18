@@ -4,12 +4,12 @@ from pathlib import Path
 from typing import Any
 
 from vexrag.core.evaluation import EmbeddingClient
-from vexrag.core.retrieval.document_ids import (
-    created_document_ids_for_cleanup,
+from vexrag.core.retrieval._internal.embedding_batches import build_embedded_text_batch
+from vexrag.core.retrieval._internal.id_tracking import (
+    collect_created_document_ids_for_cleanup,
     forget_created_document_ids,
     remember_created_document_ids,
 )
-from vexrag.core.retrieval.embedding_inputs import embedded_text_batch
 from vexrag.core.retrieval.errors import (
     RetrievalCorpusBackendError,
     RetrievalCorpusDependencyError,
@@ -115,7 +115,7 @@ class QdrantCorpusAdapter:
         texts: Sequence[str],
         metadata: Mapping[str, Any],
     ) -> tuple[str, ...]:
-        batch = embedded_text_batch(
+        batch = build_embedded_text_batch(
             self._embedding_client,
             texts,
             l2_normalize=self._l2_normalize,
@@ -141,7 +141,7 @@ class QdrantCorpusAdapter:
         return tuple(ids)
 
     def delete_texts(self, document_ids: Sequence[str]) -> None:
-        to_delete = created_document_ids_for_cleanup(
+        to_delete = collect_created_document_ids_for_cleanup(
             document_ids, self._created_document_ids
         )
         if not to_delete:
