@@ -37,7 +37,7 @@ def test_probe_runs_target_and_evaluation_without_corpus() -> None:
         correct_answer="clean",
         incorrect_answer="bad",
         adversarial_texts=("ctx1",),
-        corpus_poisoner=None,
+        corpus_adapter=None,
         target_system=target,
         evaluator=evaluation,
         override_contexts=False,

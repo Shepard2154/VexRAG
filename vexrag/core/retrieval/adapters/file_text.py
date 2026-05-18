@@ -3,13 +3,14 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
-from ..contracts import CorpusPoisoningError
+from vexrag.core.retrieval.errors import (
+    RetrievalCorpusError,
+    RetrievalCorpusPersistenceError,
+)
 
 
-class FileTextPoisoner:
-    """file_text corpus: one file per poison chunk."""
-
-    __slots__ = ("path", "filename_prefix")
+class FileTextCorpusAdapter:
+    """File-text corpus adapter: one file per added chunk."""
 
     def __init__(self, path: Path, filename_prefix: str) -> None:
         self.path = path
@@ -23,7 +24,7 @@ class FileTextPoisoner:
         try:
             self.path.mkdir(parents=True, exist_ok=True)
         except OSError as exc:
-            raise CorpusPoisoningError(
+            raise RetrievalCorpusPersistenceError(
                 f"could not create file_text corpus path: {self.path}"
             ) from exc
 
@@ -36,8 +37,8 @@ class FileTextPoisoner:
             try:
                 document_path.write_text(stripped_text + "\n", encoding="utf-8")
             except OSError as exc:
-                raise CorpusPoisoningError(
-                    f"could not write poisoned text to file_text corpus: {document_path}"
+                raise RetrievalCorpusPersistenceError(
+                    f"could not write text to file_text corpus: {document_path}"
                 ) from exc
             document_ids.append(str(document_path))
         return tuple(document_ids)
@@ -52,18 +53,18 @@ class FileTextPoisoner:
             try:
                 resolved = candidate.resolve()
             except OSError as exc:
-                raise CorpusPoisoningError(
+                raise RetrievalCorpusPersistenceError(
                     f"could not resolve corpus document path: {document_id}"
                 ) from exc
             if resolved != root and root not in resolved.parents:
-                raise CorpusPoisoningError(
+                raise RetrievalCorpusError(
                     f"refusing to delete path outside corpus directory: {document_id}"
                 )
             try:
                 resolved.unlink(missing_ok=True)
             except OSError as exc:
-                raise CorpusPoisoningError(
-                    f"could not delete poisoned text from file_text corpus: {resolved}"
+                raise RetrievalCorpusPersistenceError(
+                    f"could not delete text from file_text corpus: {resolved}"
                 ) from exc
 
     def _filename(

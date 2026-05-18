@@ -1,5 +1,5 @@
 from vexrag.core.evaluation import EmbeddingClient
-from vexrag.core.retrieval.poisoning.contracts import CorpusPoisoningError
+from vexrag.core.retrieval.errors import RetrievalCorpusError
 
 
 def optional_l2_normalize_batch(
@@ -12,8 +12,8 @@ def optional_l2_normalize_batch(
     try:
         import numpy as np
     except ImportError as exc:
-        raise CorpusPoisoningError(
-            "l2_normalize for corpus poisoning requires numpy "
+        raise RetrievalCorpusError(
+            "l2_normalize for retrieval corpus writes requires numpy "
             "(install faiss/chroma/qdrant extra or pip install numpy)"
         ) from exc
     out: list[list[float]] = []
@@ -26,7 +26,7 @@ def optional_l2_normalize_batch(
     return out
 
 
-def embed_poison_vectors(
+def embed_text_vectors(
     embedding_client: EmbeddingClient,
     texts: list[str],
     *,
@@ -37,7 +37,7 @@ def embed_poison_vectors(
     raw = embedding_client.embed_texts(texts)
     vectors = [[float(x) for x in row] for row in raw]
     if len(vectors) != len(texts):
-        raise CorpusPoisoningError(
+        raise RetrievalCorpusError(
             "embedding_client returned a different number of vectors than input texts"
         )
     return optional_l2_normalize_batch(vectors, enabled=l2_normalize)
