@@ -30,13 +30,13 @@ from vexrag.core.providers import (
     build_judge_client,
 )
 from vexrag.core.retrieval import (
-    ChromaPoisoner,
-    CorpusPoisoningAdapterProtocol,
-    CorpusPoisoningError,
-    FaissPoisoner,
-    FileTextPoisoner,
-    QdrantPoisoner,
+    ChromaCorpusAdapter,
+    FaissCorpusAdapter,
+    FileTextCorpusAdapter,
+    QdrantCorpusAdapter,
     RetrievalBackend,
+    RetrievalCorpusAdapter,
+    RetrievalCorpusError,
 )
 from vexrag.core.target import (
     HTTPResponsePaths,
@@ -81,15 +81,14 @@ __all__ = [
     "ProviderServiceError",
     "build_embedding_client",
     "build_judge_client",
-    # Corpus poisoning
-    "ChromaPoisoner",
-    "FaissPoisoner",
-    "QdrantPoisoner",
     # Retrieval
-    "CorpusPoisoningAdapterProtocol",
-    "CorpusPoisoningError",
-    "FileTextPoisoner",
+    "ChromaCorpusAdapter",
+    "FaissCorpusAdapter",
+    "FileTextCorpusAdapter",
+    "QdrantCorpusAdapter",
     "RetrievalBackend",
+    "RetrievalCorpusAdapter",
+    "RetrievalCorpusError",
     # Scan
     "ScanVerdict",
     # Target system

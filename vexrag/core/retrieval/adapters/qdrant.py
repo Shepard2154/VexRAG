@@ -4,10 +4,17 @@ from pathlib import Path
 from typing import Any
 
 from vexrag.core.evaluation import EmbeddingClient
-
-from .._texts import nonempty_stripped_strs
-from ..contracts import CorpusPoisoningError
-from ..embeddings import embed_poison_vectors
+from vexrag.core.retrieval.document_ids import (
+    created_document_ids_for_cleanup,
+    forget_created_document_ids,
+    remember_created_document_ids,
+)
+from vexrag.core.retrieval.embedding_inputs import embedded_text_batch
+from vexrag.core.retrieval.errors import (
+    RetrievalCorpusBackendError,
+    RetrievalCorpusDependencyError,
+    RetrievalCorpusError,
+)
 
 
 def _qdrant_point_payload(text: str, metadata: Mapping[str, Any]) -> dict[str, Any]:
@@ -43,18 +50,8 @@ def _build_qdrant_points(
     return points, ids
 
 
-class QdrantPoisoner:
-    """Qdrant upsert/delete for corpus poisoning."""
-
-    __slots__ = (
-        "_client",
-        "_collection",
-        "_vector_name",
-        "_owned_ids",
-        "_embedding_client",
-        "_l2_normalize",
-        "_qmodels",
-    )
+class QdrantCorpusAdapter:
+    """Qdrant upsert/delete adapter for retrieval corpus writes."""
 
     def __init__(
         self,
@@ -71,27 +68,37 @@ class QdrantPoisoner:
         try:
             from qdrant_client import QdrantClient
             from qdrant_client.http import models as qmodels
+            from qdrant_client.http.exceptions import (
+                ApiException,
+                ResponseHandlingException,
+                UnexpectedResponse,
+            )
         except ImportError as exc:
-            raise CorpusPoisoningError(
-                "Qdrant corpus poisoning requires optional dependencies; "
+            raise RetrievalCorpusDependencyError(
+                "Qdrant retrieval corpus writes require optional dependencies; "
                 "install with: pip install 'vexrag[qdrant]'"
             ) from exc
 
         if url and path:
-            raise CorpusPoisoningError(
-                "qdrant corpus poisoning config must set only one of url or path"
+            raise RetrievalCorpusError(
+                "qdrant retrieval config must set only one of url or path"
             )
         if not url and not path:
-            raise CorpusPoisoningError(
-                "qdrant corpus poisoning requires qdrant.url or qdrant.path"
+            raise RetrievalCorpusError(
+                "qdrant retrieval config requires qdrant.url or qdrant.path"
             )
 
         self._qmodels = qmodels
         self._collection = collection
         self._vector_name = vector_name or None
-        self._owned_ids: set[str] = set()
+        self._created_document_ids: set[str] = set()
         self._embedding_client = embedding_client
         self._l2_normalize = l2_normalize
+        self._qdrant_backend_errors = (
+            ApiException,
+            ResponseHandlingException,
+            UnexpectedResponse,
+        )
 
         if url:
             self._client = QdrantClient(
@@ -108,40 +115,35 @@ class QdrantPoisoner:
         texts: Sequence[str],
         metadata: Mapping[str, Any],
     ) -> tuple[str, ...]:
-        stripped = nonempty_stripped_strs(texts)
-        if not stripped:
-            return ()
-        vectors = embed_poison_vectors(
+        batch = embedded_text_batch(
             self._embedding_client,
-            stripped,
+            texts,
             l2_normalize=self._l2_normalize,
         )
+        if batch is None:
+            return ()
         points, ids = _build_qdrant_points(
-            stripped,
-            vectors,
+            batch.texts,
+            batch.vectors,
             metadata,
             self._vector_name,
             self._qmodels,
         )
-        for pid in ids:
-            self._owned_ids.add(pid)
+        remembered_ids = remember_created_document_ids(self._created_document_ids, ids)
         try:
             self._client.upsert(
                 collection_name=self._collection,
                 points=points,
             )
-        except Exception as exc:
-            for pid in ids:
-                self._owned_ids.discard(pid)
-            raise CorpusPoisoningError(f"qdrant upsert failed: {exc}") from exc
+        except self._qdrant_backend_errors as exc:
+            forget_created_document_ids(self._created_document_ids, remembered_ids)
+            raise RetrievalCorpusBackendError(f"qdrant upsert failed: {exc}") from exc
         return tuple(ids)
 
     def delete_texts(self, document_ids: Sequence[str]) -> None:
-        to_delete = [
-            did.strip()
-            for did in document_ids
-            if isinstance(did, str) and did.strip() and did.strip() in self._owned_ids
-        ]
+        to_delete = created_document_ids_for_cleanup(
+            document_ids, self._created_document_ids
+        )
         if not to_delete:
             return
         try:
@@ -151,7 +153,6 @@ class QdrantPoisoner:
                     points=list(to_delete),
                 ),
             )
-        except Exception as exc:
-            raise CorpusPoisoningError(f"qdrant delete failed: {exc}") from exc
-        for pid in to_delete:
-            self._owned_ids.discard(pid)
+        except self._qdrant_backend_errors as exc:
+            raise RetrievalCorpusBackendError(f"qdrant delete failed: {exc}") from exc
+        forget_created_document_ids(self._created_document_ids, to_delete)

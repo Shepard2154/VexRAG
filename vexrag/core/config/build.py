@@ -27,12 +27,12 @@ from vexrag.core.providers import (
     build_judge_client as build_provider_judge_client,
 )
 from vexrag.core.retrieval import (
-    ChromaPoisoner,
-    CorpusPoisoningAdapterProtocol,
-    FaissPoisoner,
-    FileTextPoisoner,
-    QdrantPoisoner,
+    ChromaCorpusAdapter,
+    FaissCorpusAdapter,
+    FileTextCorpusAdapter,
+    QdrantCorpusAdapter,
     RetrievalBackend,
+    RetrievalCorpusAdapter,
 )
 from vexrag.core.target import (
     HTTPTargetSystemAdapter,
@@ -93,28 +93,28 @@ def build_target_system(config: Mapping[str, Any]) -> HTTPTargetSystemAdapter:
     )
 
 
-def build_corpus_poisoner(
+def build_retrieval_corpus_adapter(
     config: Mapping[str, Any],
     *,
     base_dir: Path | None = None,
-) -> CorpusPoisoningAdapterProtocol | None:
+) -> RetrievalCorpusAdapter | None:
     scan_config = config.get("scan", {})
     if not isinstance(scan_config, Mapping):
         raise ScanConfigError("scan must be a mapping")
 
-    poison_config = scan_config.get("corpus_poisoning", config.get("retrieval"))
-    if poison_config in (None, False):
+    corpus_config = scan_config.get("corpus_poisoning", config.get("retrieval"))
+    if corpus_config in (None, False):
         return None
-    if not isinstance(poison_config, Mapping):
+    if not isinstance(corpus_config, Mapping):
         raise ScanConfigError("scan.corpus_poisoning must be a mapping")
 
-    poison_config_accessor = ScanConfigAccessor(
-        poison_config, prefix="scan.corpus_poisoning", base_dir=base_dir
+    corpus_config_accessor = ScanConfigAccessor(
+        corpus_config, prefix="scan.corpus_poisoning", base_dir=base_dir
     )
 
     try:
         backend = RetrievalBackend(
-            str(poison_config.get("backend", poison_config.get("type", "file_text")))
+            str(corpus_config.get("backend", corpus_config.get("type", "file_text")))
         )
     except ValueError as exc:
         supported = ", ".join(backend.value for backend in RetrievalBackend)
@@ -122,45 +122,45 @@ def build_corpus_poisoner(
             f"scan.corpus_poisoning.backend must be one of: {supported}"
         ) from exc
 
-    backend_config = _backend_config(poison_config, backend)
-    prefix_raw = poison_config.get("filename_prefix", "poisonedrag")
+    backend_config = _backend_config(corpus_config, backend)
+    prefix_raw = corpus_config.get("filename_prefix", "poisonedrag")
     if not isinstance(prefix_raw, str) or not prefix_raw.strip():
         filename_prefix = "poisonedrag"
     else:
         filename_prefix = prefix_raw.strip()
 
     if backend is RetrievalBackend.FILE_TEXT:
-        corpus_path = poison_config_accessor.get_path(
+        corpus_path = corpus_config_accessor.get_path(
             "path", "directory", "contexts_dir", "corpus_path"
         )
-        return FileTextPoisoner(
+        return FileTextCorpusAdapter(
             path=corpus_path,
             filename_prefix=filename_prefix,
         )
 
-    embedding_section = _corpus_poisoning_embedding_section(
+    embedding_section = _corpus_embedding_section(
         backend_config,
         f"scan.corpus_poisoning.{backend.value}",
     )
     embedding_client = build_provider_embedding_client(embedding_section)
-    l2_normalize = poison_config_accessor.get_bool("l2_normalize", False)
+    l2_normalize = corpus_config_accessor.get_bool("l2_normalize", False)
 
     if backend is RetrievalBackend.QDRANT:
-        return _build_qdrant_corpus_poisoner(
+        return _build_qdrant_corpus_adapter(
             backend_config,
             embedding_client=embedding_client,
             l2_normalize=l2_normalize,
             base_dir=base_dir,
         )
     if backend is RetrievalBackend.CHROMA:
-        return _build_chroma_corpus_poisoner(
+        return _build_chroma_corpus_adapter(
             backend_config,
             embedding_client=embedding_client,
             l2_normalize=l2_normalize,
             base_dir=base_dir,
         )
     if backend is RetrievalBackend.FAISS:
-        return _build_faiss_corpus_poisoner(
+        return _build_faiss_corpus_adapter(
             backend_config,
             embedding_client=embedding_client,
             l2_normalize=l2_normalize,
@@ -169,7 +169,7 @@ def build_corpus_poisoner(
     raise ScanConfigError(f"unsupported corpus poisoning backend: {backend.value}")
 
 
-def _corpus_poisoning_embedding_section(
+def _corpus_embedding_section(
     backend_cfg: Mapping[str, Any],
     prefix: str,
 ) -> Mapping[str, Any]:
@@ -193,7 +193,7 @@ def _vector_backend_collection_name(
     raise ScanConfigError(f"{prefix} must set collection or collection_name")
 
 
-def _optional_poison_timeout(
+def _optional_corpus_timeout(
     backend_cfg: Mapping[str, Any],
     prefix: str,
 ) -> float | None:
@@ -211,13 +211,13 @@ def _optional_poison_timeout(
     return out
 
 
-def _build_qdrant_corpus_poisoner(
+def _build_qdrant_corpus_adapter(
     backend_cfg: Mapping[str, Any],
     *,
     embedding_client: EmbeddingClient,
     l2_normalize: bool,
     base_dir: Path | None,
-) -> QdrantPoisoner:
+) -> QdrantCorpusAdapter:
     prefix = "scan.corpus_poisoning.qdrant"
     qdrant_config_accessor = ScanConfigAccessor(
         backend_cfg, prefix="scan.corpus_poisoning.qdrant"
@@ -235,9 +235,9 @@ def _build_qdrant_corpus_poisoner(
         raise ScanConfigError(f"{prefix} must set url or path")
     collection = _vector_backend_collection_name(backend_cfg, prefix)
     vector_name = qdrant_config_accessor.get_optional_string("vector_name")
-    timeout = _optional_poison_timeout(backend_cfg, prefix)
+    timeout = _optional_corpus_timeout(backend_cfg, prefix)
     api_key = qdrant_config_accessor.get_optional_string("api_key")
-    return QdrantPoisoner(
+    return QdrantCorpusAdapter(
         url=url,
         path=path,
         collection=collection,
@@ -249,13 +249,13 @@ def _build_qdrant_corpus_poisoner(
     )
 
 
-def _build_chroma_corpus_poisoner(
+def _build_chroma_corpus_adapter(
     backend_cfg: Mapping[str, Any],
     *,
     embedding_client: EmbeddingClient,
     l2_normalize: bool,
     base_dir: Path | None,
-) -> ChromaPoisoner:
+) -> ChromaCorpusAdapter:
     prefix = "scan.corpus_poisoning.chroma"
     chroma_config_accessor = ScanConfigAccessor(
         backend_cfg, prefix="scan.corpus_poisoning.chroma"
@@ -278,7 +278,7 @@ def _build_chroma_corpus_poisoner(
         if not persist_directory.is_absolute() and base_dir is not None:
             persist_directory = base_dir / persist_directory
     collection_name = _vector_backend_collection_name(backend_cfg, prefix)
-    return ChromaPoisoner(
+    return ChromaCorpusAdapter(
         persist_directory=persist_directory,
         host=host,
         port=port,
@@ -288,13 +288,13 @@ def _build_chroma_corpus_poisoner(
     )
 
 
-def _build_faiss_corpus_poisoner(
+def _build_faiss_corpus_adapter(
     backend_cfg: Mapping[str, Any],
     *,
     embedding_client: EmbeddingClient,
     l2_normalize: bool,
     base_dir: Path | None,
-) -> FaissPoisoner:
+) -> FaissCorpusAdapter:
     prefix = "scan.corpus_poisoning.faiss"
     faiss_config_accessor = ScanConfigAccessor(
         backend_cfg, prefix="scan.corpus_poisoning.faiss"
@@ -305,22 +305,22 @@ def _build_faiss_corpus_poisoner(
         prefix,
         base_dir=base_dir,
     )
-    poison_start = backend_cfg.get("poison_id_start")
-    poison_id_start = -1
-    if poison_start is not None:
-        if isinstance(poison_start, bool):
+    added_point_start = backend_cfg.get("poison_id_start")
+    added_point_id_start = -1
+    if added_point_start is not None:
+        if isinstance(added_point_start, bool):
             raise ScanConfigError(f"{prefix}.poison_id_start must be an integer")
         try:
-            poison_id_start = int(poison_start)
+            added_point_id_start = int(added_point_start)
         except (TypeError, ValueError) as exc:
             raise ScanConfigError(
                 f"{prefix}.poison_id_start must be an integer"
             ) from exc
-    return FaissPoisoner(
+    return FaissCorpusAdapter(
         faiss_dir,
         embedding_client,
         l2_normalize=l2_normalize,
-        poison_id_start=poison_id_start,
+        added_point_id_start=added_point_id_start,
     )
 
 

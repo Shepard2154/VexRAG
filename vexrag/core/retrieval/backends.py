@@ -8,6 +8,3 @@ class RetrievalBackend(StrEnum):
     FAISS = "faiss"
     CHROMA = "chroma"
     FILE_TEXT = "file_text"
-
-    def uses_named_collection(self) -> bool:
-        return self is not RetrievalBackend.FILE_TEXT

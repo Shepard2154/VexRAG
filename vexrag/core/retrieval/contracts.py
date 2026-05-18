@@ -2,12 +2,8 @@ from collections.abc import Mapping, Sequence
 from typing import Any, Protocol
 
 
-class CorpusPoisoningError(RuntimeError):
-    """Corpus poisoning I/O failure."""
-
-
-class CorpusPoisoningAdapterProtocol(Protocol):
-    """Write poison chunks into retrieval storage."""
+class RetrievalCorpusAdapter(Protocol):
+    """Write adversarial chunks into a retrieval corpus and clean them up."""
 
     def add_texts(
         self,

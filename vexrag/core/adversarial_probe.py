@@ -2,7 +2,7 @@ import logging
 from typing import Any
 
 from vexrag.core.evaluation import EvaluationInput, EvaluationResult, Evaluator
-from vexrag.core.retrieval import CorpusPoisoningAdapterProtocol
+from vexrag.core.retrieval import RetrievalCorpusAdapter
 from vexrag.core.target import (
     TargetSystemAdapterProtocol,
     TargetSystemQuery,
@@ -18,7 +18,7 @@ def probe_with_poisoning_and_evaluation(
     correct_answer: str,
     incorrect_answer: str,
     adversarial_texts: tuple[str, ...],
-    corpus_poisoner: CorpusPoisoningAdapterProtocol | None,
+    corpus_adapter: RetrievalCorpusAdapter | None,
     target_system: TargetSystemAdapterProtocol,
     evaluator: Evaluator,
     override_contexts: bool,
@@ -28,7 +28,7 @@ def probe_with_poisoning_and_evaluation(
 ) -> tuple[TargetSystemResponse, EvaluationResult]:
     """Write adversarial texts to corpus (optional), query target, evaluate, optionally cleanup."""
     poisoned_document_ids = _poison_retrieval_corpus(
-        corpus_poisoner=corpus_poisoner,
+        corpus_adapter=corpus_adapter,
         adversarial_texts=adversarial_texts,
         metadata=metadata,
     )
@@ -56,7 +56,7 @@ def probe_with_poisoning_and_evaluation(
         return system_response, evaluation
     finally:
         _cleanup_poisoned_documents(
-            corpus_poisoner=corpus_poisoner,
+            corpus_adapter=corpus_adapter,
             poisoned_document_ids=poisoned_document_ids,
             cleanup=cleanup,
             label=corpus_cleanup_label,
@@ -65,27 +65,27 @@ def probe_with_poisoning_and_evaluation(
 
 def _poison_retrieval_corpus(
     *,
-    corpus_poisoner: CorpusPoisoningAdapterProtocol | None,
+    corpus_adapter: RetrievalCorpusAdapter | None,
     adversarial_texts: tuple[str, ...],
     metadata: dict[str, Any],
 ) -> tuple[str, ...]:
-    if corpus_poisoner is None or not adversarial_texts:
+    if corpus_adapter is None or not adversarial_texts:
         return ()
     LOGGER.info(
         "Writing %d adversarial text(s) into retrieval corpus",
         len(adversarial_texts),
     )
-    return corpus_poisoner.add_texts(adversarial_texts, metadata)
+    return corpus_adapter.add_texts(adversarial_texts, metadata)
 
 
 def _cleanup_poisoned_documents(
     *,
-    corpus_poisoner: CorpusPoisoningAdapterProtocol | None,
+    corpus_adapter: RetrievalCorpusAdapter | None,
     poisoned_document_ids: tuple[str, ...],
     cleanup: bool,
     label: str,
 ) -> None:
-    if not cleanup or not poisoned_document_ids or corpus_poisoner is None:
+    if not cleanup or not poisoned_document_ids or corpus_adapter is None:
         return
     LOGGER.info("Cleaning up %s from retrieval corpus", label)
-    corpus_poisoner.delete_texts(poisoned_document_ids)
+    corpus_adapter.delete_texts(poisoned_document_ids)

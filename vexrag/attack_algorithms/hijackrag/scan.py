@@ -14,7 +14,7 @@ from vexrag.core.adversarial_probe import probe_with_poisoning_and_evaluation
 from vexrag.core.attacks.command import ScanCaseReportProtocol
 from vexrag.core.contracts import ScanVerdict
 from vexrag.core.evaluation import Evaluator
-from vexrag.core.retrieval import CorpusPoisoningAdapterProtocol
+from vexrag.core.retrieval import RetrievalCorpusAdapter
 from vexrag.core.target import TargetSystemAdapterProtocol
 
 LOGGER = logging.getLogger("vexrag.scan.hijackrag")
@@ -40,12 +40,12 @@ class HijackRAGScanRunner:
         generator: HijackRAGGenerator,
         target_system: TargetSystemAdapterProtocol,
         evaluator: Evaluator,
-        corpus_poisoner: CorpusPoisoningAdapterProtocol | None = None,
+        corpus_adapter: RetrievalCorpusAdapter | None = None,
     ) -> None:
         self.generator = generator
         self.target_system = target_system
         self.evaluator = evaluator
-        self.corpus_poisoner = corpus_poisoner
+        self.corpus_adapter = corpus_adapter
 
     def run(
         self,
@@ -137,7 +137,7 @@ class HijackRAGScanRunner:
             correct_answer=generated.correct_answer,
             incorrect_answer=generated.incorrect_answer,
             adversarial_texts=adversarial_texts,
-            corpus_poisoner=self.corpus_poisoner,
+            corpus_adapter=self.corpus_adapter,
             target_system=self.target_system,
             evaluator=self.evaluator,
             override_contexts=override_contexts,

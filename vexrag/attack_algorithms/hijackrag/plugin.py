@@ -20,8 +20,8 @@ from vexrag.core.config import ScanConfigAccessor, ScanConfigError
 from vexrag.core.config.build import (
     attack_llm_client_section,
     attack_section,
-    build_corpus_poisoner,
     build_evaluator,
+    build_retrieval_corpus_adapter,
     build_target_system,
     case_configs_from_value,
     cleanup_option,
@@ -252,7 +252,7 @@ def _build_scan_command(
             generator=generator,
             target_system=target_system,
             evaluator=evaluator,
-            corpus_poisoner=build_corpus_poisoner(config, base_dir=base_dir),
+            corpus_adapter=build_retrieval_corpus_adapter(config, base_dir=base_dir),
         ),
         requests=build_hijackrag_requests(config, base_dir=base_dir),
         scan_config=build_hijackrag_scan_config(config),
