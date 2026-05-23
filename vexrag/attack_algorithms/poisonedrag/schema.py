@@ -1,7 +1,11 @@
 from dataclasses import dataclass, field
 from typing import Literal
 
-from vexrag.core.contracts import CorrectAnswerSource, PoisonedResult, TargetStyle
+from vexrag.core.attack_configurator import (
+    CorrectAnswerSource,
+    PoisonedResult,
+    TargetStyle,
+)
 
 PoisoningStyle = Literal["original", "aggressive", "soft"]
 

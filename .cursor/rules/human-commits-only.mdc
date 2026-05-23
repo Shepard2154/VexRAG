@@ -1,0 +1,12 @@
+---
+description: Git commits are made by the user, never by the agent
+alwaysApply: true
+---
+
+# Human Commits Only
+
+- Do not run `git commit`, `git push`, or create commits on behalf of the user.
+- Do not stage files (`git add`) in preparation for a commit unless the user explicitly asks for staging help without committing.
+- When work is ready to land, summarize the diff and let the user commit manually.
+- If the user asks to "save" or "finish" work, treat that as code completion — not permission to commit.
+- Only discuss commit messages or git workflow when the user brings up committing themselves.

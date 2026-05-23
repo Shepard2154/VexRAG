@@ -14,11 +14,15 @@ from vexrag.attack_algorithms.poisonedrag.scan import (
     PoisonedRAGScanRunner,
 )
 from vexrag.attack_algorithms.poisonedrag.schema import PoisonedRAGRequest
-from vexrag.core.attacks.command import ConfiguredScanCommand
-from vexrag.core.attacks.plugin import AttackPlugin, GenerateCasesParams
-from vexrag.core.attacks.registry import AttackRegistry
-from vexrag.core.config import ScanConfigAccessor, ScanConfigError
-from vexrag.core.config.build import (
+from vexrag.attack_algorithms.registries import create_scan_registries
+from vexrag.core.attack_configurator.types import (
+    AttackMethodConfigurator,
+    GenerateCasesParams,
+)
+from vexrag.core.base_configuration import ConfigAccessor
+from vexrag.core.llm import JSONGenerationLLMClientAdapter
+from vexrag.core.llm.providers.defaults import create_default_llm_provider_registry
+from vexrag.core.scan.builder import (
     attack_llm_client_section,
     attack_section,
     build_corpus_poisoner,
@@ -31,16 +35,20 @@ from vexrag.core.config.build import (
     poisoning_style_option,
     target_style_option,
 )
-from vexrag.core.json_generation_client import JSONGenerationLLMClientAdapter
-from vexrag.core.providers import build_judge_client as build_provider_judge_client
-from vexrag.core.target import HTTPTargetSystemAdapter
-from vexrag.core.target_correct_answer import TargetCorrectAnswerProvider
+from vexrag.core.scan.builder.registries import ScanRegistries
+from vexrag.core.scan.config.errors import ScanConfigError
+from vexrag.core.scan.execution import ConfiguredScanCommand
+from vexrag.core.target_systems import (
+    HTTPTargetSystemAdapter,
+    TargetCorrectAnswerProvider,
+)
 
 
 def _build_poison_llm_client(
     config: Mapping[str, Any],
     *,
     attack_config: Mapping[str, Any] | None = None,
+    registries: ScanRegistries | None = None,
 ) -> JSONGenerationLLMClientAdapter:
     resolved_attack_config = attack_config or attack_section(config, "poisonedrag")
     llm_client_config = attack_llm_client_section(
@@ -48,8 +56,13 @@ def _build_poison_llm_client(
         resolved_attack_config,
         attack="poisonedrag",
     )
+    providers = (
+        registries.llm_providers
+        if registries is not None
+        else create_default_llm_provider_registry()
+    )
     return JSONGenerationLLMClientAdapter(
-        build_provider_judge_client(llm_client_config)
+        providers.build_json_completion_client(llm_client_config)
     )
 
 
@@ -57,9 +70,14 @@ def build_poisonedrag_generator(
     config: Mapping[str, Any],
     *,
     target_system: HTTPTargetSystemAdapter,
+    registries: ScanRegistries | None = None,
 ) -> PoisonedRAGGenerator:
     attack_conf = attack_section(config, "poisonedrag")
-    llm_client = _build_poison_llm_client(config, attack_config=attack_conf)
+    llm_client = _build_poison_llm_client(
+        config,
+        attack_config=attack_conf,
+        registries=registries,
+    )
     correct_answer_provider = None
     if str(attack_conf.get("correct_answer_provider", "")).strip() == "target_system":
         correct_answer_provider = TargetCorrectAnswerProvider(
@@ -104,9 +122,15 @@ def _build_poisonedrag_request(
     case_number: int,
 ) -> PoisonedRAGRequest:
     prefix = f"attack.poisonedrag.cases[{case_number}]"
-    case_config_accessor = ScanConfigAccessor(case_config, prefix=prefix)
-    attack_config_accessor = ScanConfigAccessor(
-        attack_config, prefix="attack.poisonedrag"
+    case_config_accessor = ConfigAccessor(
+        case_config,
+        prefix=prefix,
+        error_type=ScanConfigError,
+    )
+    attack_config_accessor = ConfigAccessor(
+        attack_config,
+        prefix="attack.poisonedrag",
+        error_type=ScanConfigError,
     )
     return PoisonedRAGRequest(
         query=case_config_accessor.get_required_string("query"),
@@ -166,7 +190,11 @@ def build_poisonedrag_scan_config(config: Mapping[str, Any]) -> PoisonedRAGScanC
     scan_config = config.get("scan", {})
     if not isinstance(scan_config, Mapping):
         raise ScanConfigError("scan must be a mapping")
-    scan_config_accessor = ScanConfigAccessor(scan_config, prefix="scan")
+    scan_config_accessor = ConfigAccessor(
+        scan_config,
+        prefix="scan",
+        error_type=ScanConfigError,
+    )
     return PoisonedRAGScanConfig(
         repetitions=scan_config_accessor.get_optional_int("repetitions", 1),
         attack_success_rate_threshold=scan_config_accessor.get_optional_float(
@@ -181,21 +209,27 @@ def _build_scan_command(
     config: Mapping[str, Any],
     base_dir: Path | None = None,
 ) -> ConfiguredScanCommand:
-    registry = AttackRegistry()
-    registry.register(POISON_PLUGIN)
-    target_system = build_target_system(config)
-    generator = build_poisonedrag_generator(config, target_system=target_system)
+    registries = create_scan_registries(base_dir=base_dir)
+    target_system = build_target_system(
+        config,
+        registry=registries.target_systems,
+    )
+    generator = build_poisonedrag_generator(
+        config,
+        target_system=target_system,
+        registries=registries,
+    )
     evaluator = build_evaluator(
         config,
         attack_id="poisonedrag",
-        registry=registry,
+        registries=registries,
     )
     return ConfiguredScanCommand(
         runner=PoisonedRAGScanRunner(
             generator=generator,
             target_system=target_system,
             evaluator=evaluator,
-            corpus_poisoner=build_corpus_poisoner(config, base_dir=base_dir),
+            corpus_poisoner=build_corpus_poisoner(config, registries=registries),
         ),
         requests=build_poisonedrag_requests(config, base_dir=base_dir),
         scan_config=build_poisonedrag_scan_config(config),
@@ -244,7 +278,7 @@ def _generate_cases(
     )
 
 
-POISON_PLUGIN = AttackPlugin(
+POISON_PLUGIN = AttackMethodConfigurator(
     attack_id="poisonedrag",
     display_name="PoisonedRAG",
     build_scan_command=_build_scan_command,

@@ -1,10 +1,13 @@
+from __future__ import annotations  # noqa: TID251
+
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
-from vexrag.core.evaluation.contracts import JudgePromptBuilder
-from vexrag.core.scan.contracts import ScanCommand
+if TYPE_CHECKING:
+    from vexrag.core.evaluation.contracts import JudgePromptBuilder
+    from vexrag.core.scan.contracts import ScanCommand
 
 TargetStyle = Literal["short_fact", "paragraph"]
 CorrectAnswerSource = Literal["provided", "target_system", "llm_generated"]

@@ -1,7 +1,7 @@
 import pytest
 
+from vexrag.core.retrieval.errors import CorpusPoisoningError
 from vexrag.core.retrieval.poisoning.adapters.file_text import FileTextPoisoner
-from vexrag.core.retrieval.poisoning.contracts import CorpusPoisoningError
 
 
 def test_file_text_poisoner_rejects_delete_outside_root(tmp_path) -> None:

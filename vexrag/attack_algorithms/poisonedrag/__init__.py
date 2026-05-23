@@ -28,8 +28,8 @@ from vexrag.attack_algorithms.poisonedrag.schema import (
     TargetStyle,
 )
 from vexrag.attack_algorithms.poisonedrag.validators import PoisonedRAGValidationError
-from vexrag.core.contracts import CorrectAnswerProviderProtocol, LLMClientProtocol
-from vexrag.core.correct_answer_prompt import build_correct_answer_prompt
+from vexrag.core.attack_configurator import CorrectAnswerProvider
+from vexrag.core.llm import JsonCompletionClient, build_correct_answer_prompt
 
 __all__ = [
     "POISON_PLUGIN",
@@ -38,8 +38,8 @@ __all__ = [
     "AutomaticCaseGenerationError",
     "AutomaticPoisonedRAGCaseGenerator",
     # Generator
-    "CorrectAnswerProviderProtocol",
-    "LLMClientProtocol",
+    "CorrectAnswerProvider",
+    "JsonCompletionClient",
     "PoisonedRAGGenerator",
     # Prompt helpers
     "PROMPT_VERSION",

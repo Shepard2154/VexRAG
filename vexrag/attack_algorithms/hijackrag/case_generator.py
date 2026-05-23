@@ -2,8 +2,9 @@ import re
 from typing import Any
 
 from vexrag.attack_algorithms.hijackrag.schema import HijackRAGRequest
-from vexrag.core.contracts import LLMClientProtocol, TargetStyle
-from vexrag.core.llm_response_validation import (
+from vexrag.core.attack_configurator import TargetStyle
+from vexrag.core.llm import (
+    JsonCompletionClient,
     LLMPayloadValidationError,
     coerce_payload_to_dict,
 )
@@ -22,7 +23,7 @@ class AutomaticHijackRAGCaseGenerator:
 
     def __init__(
         self,
-        llm_client: LLMClientProtocol,
+        llm_client: JsonCompletionClient,
         prompt_version: str = PROMPT_VERSION,
     ) -> None:
         self.llm_client = llm_client

@@ -1,19 +1,20 @@
 import pytest
 
-from vexrag.core.attack_plan import (
+from vexrag.core.attack_configurator.errors import AttackMethodRegistryError
+from vexrag.core.attack_configurator.registry import AttackMethodRegistryBuilder
+from vexrag.core.attack_configurator.types import AttackMethodConfigurator
+from vexrag.core.scan.config import (
     AttackStepSpec,
+    ScanConfigError,
     materialize_config_for_attack_id,
     materialize_step_config,
     parse_attack_steps,
     resolve_generate_cases_attack_id,
 )
-from vexrag.core.attacks.plugin import AttackPlugin
-from vexrag.core.attacks.registry import AttackRegistry, AttackRegistryError
-from vexrag.core.config import ScanConfigError
 
 
-def _stub_plugin(aid: str) -> AttackPlugin:
-    return AttackPlugin(
+def _stub_plugin(aid: str) -> AttackMethodConfigurator:
+    return AttackMethodConfigurator(
         attack_id=aid,
         display_name=aid,
         build_scan_command=lambda c, b=None: object(),
@@ -24,9 +25,15 @@ def _stub_plugin(aid: str) -> AttackPlugin:
     )
 
 
+def _stub_registry(*ids: str):
+    builder = AttackMethodRegistryBuilder()
+    for aid in ids:
+        builder.register(_stub_plugin(aid))
+    return builder.build()
+
+
 def test_parse_single_step() -> None:
-    reg = AttackRegistry()
-    reg.register(_stub_plugin("alpha"))
+    reg = _stub_registry("alpha")
     cfg = {
         "attacks": [{"id": "alpha", "params": {"x": 1}}],
         "scan": {"repetitions": 2},
@@ -39,8 +46,7 @@ def test_parse_single_step() -> None:
 
 
 def test_parse_rejects_legacy_attack_key() -> None:
-    reg = AttackRegistry()
-    reg.register(_stub_plugin("alpha"))
+    reg = _stub_registry("alpha")
     with pytest.raises(ScanConfigError, match="legacy"):
         parse_attack_steps(
             {"attack": {"alpha": {}}, "attacks": [{"id": "alpha", "params": {}}]},
@@ -49,8 +55,6 @@ def test_parse_rejects_legacy_attack_key() -> None:
 
 
 def test_materialize_merges_scan_and_evaluation() -> None:
-    reg = AttackRegistry()
-    reg.register(_stub_plugin("alpha"))
     step = AttackStepSpec(
         attack_id="alpha",
         params={"k": 1},
@@ -79,30 +83,25 @@ def test_materialize_merges_scan_and_evaluation() -> None:
 
 
 def test_resolve_generate_cases_auto_single() -> None:
-    reg = AttackRegistry()
-    reg.register(_stub_plugin("alpha"))
+    reg = _stub_registry("alpha")
     cfg = {"attacks": [{"id": "alpha", "params": {}}]}
     assert resolve_generate_cases_attack_id(cfg, reg, explicit=None) == "alpha"
 
 
 def test_resolve_generate_cases_auto_multi_requires_explicit() -> None:
-    reg = AttackRegistry()
-    reg.register(_stub_plugin("alpha"))
-    reg.register(_stub_plugin("beta"))
+    reg = _stub_registry("alpha", "beta")
     cfg = {
         "attacks": [
             {"id": "alpha", "params": {}},
             {"id": "beta", "params": {}},
         ]
     }
-    with pytest.raises(AttackRegistryError, match="multiple"):
+    with pytest.raises(AttackMethodRegistryError, match="multiple"):
         resolve_generate_cases_attack_id(cfg, reg, explicit=None)
 
 
 def test_materialize_config_for_attack_id_picks_step() -> None:
-    reg = AttackRegistry()
-    reg.register(_stub_plugin("alpha"))
-    reg.register(_stub_plugin("beta"))
+    reg = _stub_registry("alpha", "beta")
     cfg = {
         "attacks": [
             {"id": "alpha", "params": {"a": 1}},

@@ -3,8 +3,9 @@ from pathlib import Path
 
 import pytest
 
-from vexrag.core.config import ScanConfigError
-from vexrag.core.config.build import build_corpus_poisoner
+from vexrag.attack_algorithms.registries import create_scan_registries
+from vexrag.core.scan.builder import build_corpus_poisoner
+from vexrag.core.scan.config.errors import ScanConfigError
 
 _EMBEDDING_OLLAMA = {
     "provider": "ollama",
@@ -25,7 +26,7 @@ def test_build_vector_poisoner_requires_embedding_client() -> None:
         },
     }
     with pytest.raises(ScanConfigError, match="embedding_client"):
-        build_corpus_poisoner(cfg)
+        build_corpus_poisoner(cfg, registries=create_scan_registries())
 
 
 def test_build_chroma_poisoner_rejects_host_and_persist_path() -> None:
@@ -41,7 +42,7 @@ def test_build_chroma_poisoner_rejects_host_and_persist_path() -> None:
         },
     }
     with pytest.raises(ScanConfigError, match="persist_directory"):
-        build_corpus_poisoner(cfg)
+        build_corpus_poisoner(cfg, registries=create_scan_registries())
 
 
 def test_build_qdrant_poisoner_rejects_url_and_path() -> None:
@@ -57,7 +58,7 @@ def test_build_qdrant_poisoner_rejects_url_and_path() -> None:
         },
     }
     with pytest.raises(ScanConfigError, match="only one of url or path"):
-        build_corpus_poisoner(cfg)
+        build_corpus_poisoner(cfg, registries=create_scan_registries())
 
 
 def test_faiss_poison_add_and_delete_roundtrip(tmp_path: Path) -> None:

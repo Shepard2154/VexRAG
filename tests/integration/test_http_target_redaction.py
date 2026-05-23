@@ -2,7 +2,7 @@
 
 import pytest
 
-from vexrag.core.target import (
+from vexrag.core.target_systems import (
     HTTPTargetSystemAdapter,
     HTTPTargetSystemAdapterConfig,
     TargetSystemQuery,

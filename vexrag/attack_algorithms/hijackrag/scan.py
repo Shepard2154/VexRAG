@@ -10,12 +10,12 @@ from vexrag.attack_algorithms.hijackrag.report import (
     HijackRAGScanReport,
 )
 from vexrag.attack_algorithms.hijackrag.schema import HijackRAGRequest, HijackRAGResult
-from vexrag.core.adversarial_probe import probe_with_poisoning_and_evaluation
-from vexrag.core.attacks.command import ScanCaseReportProtocol
-from vexrag.core.contracts import ScanVerdict
 from vexrag.core.evaluation import Evaluator
-from vexrag.core.retrieval import CorpusPoisoningAdapterProtocol
-from vexrag.core.target import TargetSystemAdapterProtocol
+from vexrag.core.retrieval import CorpusPoisoner
+from vexrag.core.scan.contracts import ScanCaseReport
+from vexrag.core.scan.execution import probe_with_poisoning_and_evaluation
+from vexrag.core.scan.types import ScanVerdict
+from vexrag.core.target_systems import TargetSystemAdapter
 
 LOGGER = logging.getLogger("vexrag.scan.hijackrag")
 
@@ -38,9 +38,9 @@ class HijackRAGScanRunner:
     def __init__(
         self,
         generator: HijackRAGGenerator,
-        target_system: TargetSystemAdapterProtocol,
+        target_system: TargetSystemAdapter,
         evaluator: Evaluator,
-        corpus_poisoner: CorpusPoisoningAdapterProtocol | None = None,
+        corpus_poisoner: CorpusPoisoner | None = None,
     ) -> None:
         self.generator = generator
         self.target_system = target_system
@@ -52,7 +52,7 @@ class HijackRAGScanRunner:
         requests: Sequence[HijackRAGRequest],
         config: HijackRAGScanConfig | None = None,
         *,
-        on_case_complete: Callable[[ScanCaseReportProtocol], None] | None = None,
+        on_case_complete: Callable[[ScanCaseReport], None] | None = None,
     ) -> HijackRAGScanReport:
         scan_config = config or HijackRAGScanConfig()
         if not requests:
@@ -89,7 +89,7 @@ class HijackRAGScanRunner:
         case_index: int,
         config: HijackRAGScanConfig,
         *,
-        on_case_complete: Callable[[ScanCaseReportProtocol], None] | None = None,
+        on_case_complete: Callable[[ScanCaseReport], None] | None = None,
     ) -> tuple[HijackRAGCaseResult, ...]:
         results: list[HijackRAGCaseResult] = []
         for run_index in range(1, config.repetitions + 1):

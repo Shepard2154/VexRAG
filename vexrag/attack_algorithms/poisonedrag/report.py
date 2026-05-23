@@ -1,8 +1,8 @@
 from dataclasses import dataclass, field
 
-from vexrag.core.contracts import ScanVerdict
 from vexrag.core.evaluation import EvaluationResult
-from vexrag.core.target import TargetSystemResponse
+from vexrag.core.scan.types import ScanVerdict
+from vexrag.core.target_systems import TargetSystemResponse
 
 
 @dataclass(frozen=True, slots=True)

@@ -1,8 +1,8 @@
 from typing import Any
 
-from vexrag.core.adversarial_probe import probe_with_poisoning_and_evaluation
 from vexrag.core.evaluation import EvaluationInput, EvaluationResult
-from vexrag.core.target import TargetSystemQuery, TargetSystemResponse
+from vexrag.core.scan.execution import probe_with_poisoning_and_evaluation
+from vexrag.core.target_systems import TargetSystemQuery, TargetSystemResponse
 
 
 class _FakeEval:

@@ -1,11 +1,12 @@
 import pytest
 
-from vexrag.core.evaluation.attack_verdict import EvaluationStrategy
-from vexrag.core.evaluation.embedding_similarity_evaluator import (
+from vexrag.core.evaluation import (
     EmbeddingSimilarityEvaluator,
+    EvaluationDependencyError,
+    EvaluationInput,
+    EvaluationStrategy,
+    EvaluatorError,
 )
-from vexrag.core.evaluation.errors import EvaluationDependencyError, EvaluatorError
-from vexrag.core.evaluation.scan_case_input import EvaluationInput
 
 
 class _FailingEmbeddingClient:

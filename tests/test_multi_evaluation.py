@@ -1,13 +1,14 @@
 import pytest
 
-from vexrag.attack_algorithms.hijackrag.plugin import HIJACK_PLUGIN
-from vexrag.attack_algorithms.poisonedrag.plugin import POISON_PLUGIN
-from vexrag.core.attacks.registry import AttackRegistry
-from vexrag.core.config import EvaluationConfigError
-from vexrag.core.config.build import build_evaluator
-from vexrag.core.evaluation.attack_verdict import CombineMode, EvaluationResult
-from vexrag.core.evaluation.composite_evaluator import CompositeEvaluator
-from vexrag.core.evaluation.scan_case_input import EvaluationInput
+from vexrag.attack_algorithms.registries import create_scan_registries
+from vexrag.core.evaluation import (
+    CombineMode,
+    CompositeEvaluator,
+    EvaluationInput,
+    EvaluationResult,
+)
+from vexrag.core.scan.builder import build_evaluator
+from vexrag.core.scan.config.errors import EvaluationConfigError
 
 
 class _FixedEvaluator:
@@ -75,9 +76,7 @@ def test_composite_empty_raises() -> None:
 
 
 def test_build_evaluator_rejects_legacy_evaluations_key() -> None:
-    reg = AttackRegistry()
-    reg.register(HIJACK_PLUGIN)
-    reg.register(POISON_PLUGIN)
+    registries = create_scan_registries()
     cfg = {
         "evaluations": {
             "combine": "any",
@@ -85,13 +84,11 @@ def test_build_evaluator_rejects_legacy_evaluations_key() -> None:
         },
     }
     with pytest.raises(EvaluationConfigError, match="evaluations"):
-        build_evaluator(cfg, attack_id="hijackrag", registry=reg)
+        build_evaluator(cfg, attack_id="hijackrag", registries=registries)
 
 
 def test_build_evaluator_composite_bundle() -> None:
-    reg = AttackRegistry()
-    reg.register(HIJACK_PLUGIN)
-    reg.register(POISON_PLUGIN)
+    registries = create_scan_registries()
     emb = {
         "provider": "ollama",
         "base_url": "http://localhost:11434",
@@ -125,13 +122,12 @@ def test_build_evaluator_composite_bundle() -> None:
             ],
         },
     }
-    strat = build_evaluator(cfg, attack_id="hijackrag", registry=reg)
+    strat = build_evaluator(cfg, attack_id="hijackrag", registries=registries)
     assert isinstance(strat, CompositeEvaluator)
 
 
 def test_build_evaluator_rejects_unknown_similarity_metric() -> None:
-    reg = AttackRegistry()
-    reg.register(HIJACK_PLUGIN)
+    registries = create_scan_registries()
     emb = {
         "provider": "ollama",
         "base_url": "http://localhost:11434",
@@ -148,4 +144,4 @@ def test_build_evaluator_rejects_unknown_similarity_metric() -> None:
         },
     }
     with pytest.raises(EvaluationConfigError, match="metric must be one of"):
-        build_evaluator(cfg, attack_id="hijackrag", registry=reg)
+        build_evaluator(cfg, attack_id="hijackrag", registries=registries)

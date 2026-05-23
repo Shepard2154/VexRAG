@@ -13,11 +13,15 @@ from vexrag.attack_algorithms.hijackrag.scan import (
 )
 from vexrag.attack_algorithms.hijackrag.schema import HijackRAGRequest
 from vexrag.attack_algorithms.hijackrag.segments import default_hijack_segments_path
-from vexrag.core.attacks.command import ConfiguredScanCommand
-from vexrag.core.attacks.plugin import AttackPlugin, GenerateCasesParams
-from vexrag.core.attacks.registry import AttackRegistry
-from vexrag.core.config import ScanConfigAccessor, ScanConfigError
-from vexrag.core.config.build import (
+from vexrag.attack_algorithms.registries import create_scan_registries
+from vexrag.core.attack_configurator.types import (
+    AttackMethodConfigurator,
+    GenerateCasesParams,
+)
+from vexrag.core.base_configuration import ConfigAccessor
+from vexrag.core.llm import JSONGenerationLLMClientAdapter
+from vexrag.core.llm.providers.defaults import create_default_llm_provider_registry
+from vexrag.core.scan.builder import (
     attack_llm_client_section,
     attack_section,
     build_corpus_poisoner,
@@ -29,10 +33,13 @@ from vexrag.core.config.build import (
     load_case_configs,
     path_strings_from_value,
 )
-from vexrag.core.json_generation_client import JSONGenerationLLMClientAdapter
-from vexrag.core.providers import build_judge_client as build_provider_judge_client
-from vexrag.core.target import HTTPTargetSystemAdapter
-from vexrag.core.target_correct_answer import TargetCorrectAnswerProvider
+from vexrag.core.scan.builder.registries import ScanRegistries
+from vexrag.core.scan.config.errors import ScanConfigError
+from vexrag.core.scan.execution import ConfiguredScanCommand
+from vexrag.core.target_systems import (
+    HTTPTargetSystemAdapter,
+    TargetCorrectAnswerProvider,
+)
 
 
 def _hijack_segments_path(
@@ -59,6 +66,7 @@ def build_hijackrag_llm_client(
     config: Mapping[str, Any],
     *,
     attack_config: Mapping[str, Any] | None = None,
+    registries: ScanRegistries | None = None,
 ) -> JSONGenerationLLMClientAdapter:
     resolved = attack_config or attack_section(config, "hijackrag")
     llm_client_config = attack_llm_client_section(
@@ -66,8 +74,13 @@ def build_hijackrag_llm_client(
         resolved,
         attack="hijackrag",
     )
+    providers = (
+        registries.llm_providers
+        if registries is not None
+        else create_default_llm_provider_registry()
+    )
     return JSONGenerationLLMClientAdapter(
-        build_provider_judge_client(llm_client_config)
+        providers.build_json_completion_client(llm_client_config)
     )
 
 
@@ -76,9 +89,14 @@ def build_hijackrag_generator(
     *,
     target_system: HTTPTargetSystemAdapter,
     base_dir: Path | None = None,
+    registries: ScanRegistries | None = None,
 ) -> HijackRAGGenerator:
     attack_conf = attack_section(config, "hijackrag")
-    llm_client = build_hijackrag_llm_client(config, attack_config=attack_conf)
+    llm_client = build_hijackrag_llm_client(
+        config,
+        attack_config=attack_conf,
+        registries=registries,
+    )
     segments_path = _hijack_segments_path(attack_conf, base_dir=base_dir)
     correct_answer_provider = None
     if str(attack_conf.get("correct_answer_provider", "")).strip() == "target_system":
@@ -160,9 +178,15 @@ def _build_hijackrag_request(
     insert_raw = case_config.get("hijack_insert", case_config.get("insert_prompt"))
     if not isinstance(insert_raw, str) or not insert_raw.strip():
         raise ScanConfigError(f"{prefix}.hijack_insert is required")
-    case_config_accessor = ScanConfigAccessor(case_config, prefix=prefix)
-    attack_config_accessor = ScanConfigAccessor(
-        attack_config, prefix="attack.hijackrag"
+    case_config_accessor = ConfigAccessor(
+        case_config,
+        prefix=prefix,
+        error_type=ScanConfigError,
+    )
+    attack_config_accessor = ConfigAccessor(
+        attack_config,
+        prefix="attack.hijackrag",
+        error_type=ScanConfigError,
     )
     return HijackRAGRequest(
         query=case_config_accessor.get_required_string("query"),
@@ -219,7 +243,11 @@ def build_hijackrag_scan_config(config: Mapping[str, Any]) -> HijackRAGScanConfi
     scan_config = config.get("scan", {})
     if not isinstance(scan_config, Mapping):
         raise ScanConfigError("scan must be a mapping")
-    scan_config_accessor = ScanConfigAccessor(scan_config, prefix="scan")
+    scan_config_accessor = ConfigAccessor(
+        scan_config,
+        prefix="scan",
+        error_type=ScanConfigError,
+    )
     return HijackRAGScanConfig(
         repetitions=scan_config_accessor.get_optional_int("repetitions", 1),
         attack_success_rate_threshold=scan_config_accessor.get_optional_float(
@@ -234,25 +262,28 @@ def _build_scan_command(
     config: Mapping[str, Any],
     base_dir: Path | None = None,
 ) -> ConfiguredScanCommand:
-    registry = AttackRegistry()
-    registry.register(HIJACK_PLUGIN)
-    target_system = build_target_system(config)
+    registries = create_scan_registries(base_dir=base_dir)
+    target_system = build_target_system(
+        config,
+        registry=registries.target_systems,
+    )
     generator = build_hijackrag_generator(
         config,
         target_system=target_system,
         base_dir=base_dir,
+        registries=registries,
     )
     evaluator = build_evaluator(
         config,
         attack_id="hijackrag",
-        registry=registry,
+        registries=registries,
     )
     return ConfiguredScanCommand(
         runner=HijackRAGScanRunner(
             generator=generator,
             target_system=target_system,
             evaluator=evaluator,
-            corpus_poisoner=build_corpus_poisoner(config, base_dir=base_dir),
+            corpus_poisoner=build_corpus_poisoner(config, registries=registries),
         ),
         requests=build_hijackrag_requests(config, base_dir=base_dir),
         scan_config=build_hijackrag_scan_config(config),
@@ -306,7 +337,7 @@ def _generate_cases(
     )
 
 
-HIJACK_PLUGIN = AttackPlugin(
+HIJACK_PLUGIN = AttackMethodConfigurator(
     attack_id="hijackrag",
     display_name="HijackRAG",
     build_scan_command=_build_scan_command,

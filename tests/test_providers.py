@@ -2,13 +2,19 @@ from urllib.error import HTTPError
 
 import pytest
 
-from vexrag.core.providers import common, ollama, vllm
-from vexrag.core.providers.errors import ProviderServiceError
-from vexrag.core.providers.vllm import (
+from vexrag.core.llm.providers import http as http_common
+from vexrag.core.llm.providers import ollama, vllm
+from vexrag.core.llm.providers.config import ProviderEndpointConfig
+from vexrag.core.llm.providers.errors import ProviderServiceError
+from vexrag.core.llm.providers.http import coerce_embedding, post_json
+from vexrag.core.llm.providers.vllm import (
+    VLLMEndpointConfig,
+)
+from vexrag.core.llm.providers.vllm import (
     build_embedding_client as build_vllm_embedding_client,
 )
-from vexrag.core.providers.vllm import (
-    build_judge_client as build_vllm_judge_client,
+from vexrag.core.llm.providers.vllm import (
+    build_json_completion_client as build_vllm_json_completion_client,
 )
 
 _EXPECTED_VLLM_API_KEY = "vllm-local"
@@ -47,8 +53,38 @@ class _FailingBody:
         pass
 
 
+def _ollama_endpoint(
+    *,
+    model: str,
+    base_url: str = "http://localhost:11434",
+    endpoint: str,
+) -> ProviderEndpointConfig:
+    return ProviderEndpointConfig(
+        model=model,
+        base_url=base_url,
+        endpoint=endpoint,
+        timeout=30.0,
+    )
+
+
+def _vllm_endpoint(
+    *,
+    model: str,
+    base_url: str = "http://localhost:8000",
+    endpoint: str,
+) -> VLLMEndpointConfig:
+    return VLLMEndpointConfig(
+        endpoint=ProviderEndpointConfig(
+            model=model,
+            base_url=base_url,
+            endpoint=endpoint,
+            timeout=30.0,
+        )
+    )
+
+
 def _post_json() -> None:
-    common.post_json(
+    post_json(
         base_url="http://example.test",
         endpoint="/api",
         payload={"input": "hello"},
@@ -63,7 +99,7 @@ def _stub_provider_response(monkeypatch, provider_module, response) -> None:
 
 def test_post_json_maps_response_read_timeout(monkeypatch) -> None:
     monkeypatch.setattr(
-        common,
+        http_common,
         "urlopen",
         lambda _request, *, timeout=None: _FailingReadResponse(),
     )
@@ -79,7 +115,7 @@ def test_post_json_maps_urlopen_os_error(monkeypatch) -> None:
     def raise_os_error(_request, *, timeout=None):
         raise OSError("connection reset")
 
-    monkeypatch.setattr(common, "urlopen", raise_os_error)
+    monkeypatch.setattr(http_common, "urlopen", raise_os_error)
 
     with pytest.raises(
         ProviderServiceError,
@@ -92,7 +128,7 @@ def test_post_json_maps_request_setup_value_error(monkeypatch) -> None:
     def raise_value_error(*_args, **_kwargs):
         raise ValueError("unknown url type")
 
-    monkeypatch.setattr(common, "Request", raise_value_error)
+    monkeypatch.setattr(http_common, "Request", raise_value_error)
 
     with pytest.raises(
         ProviderServiceError,
@@ -103,7 +139,7 @@ def test_post_json_maps_request_setup_value_error(monkeypatch) -> None:
 
 def test_post_json_maps_invalid_utf8_response_body(monkeypatch) -> None:
     monkeypatch.setattr(
-        common,
+        http_common,
         "urlopen",
         lambda _request, *, timeout=None: _Response(b"\xff"),
     )
@@ -127,7 +163,7 @@ def test_post_json_maps_http_error_body_read_failure(monkeypatch) -> None:
     def raise_http_error(_request, *, timeout=None):
         raise error
 
-    monkeypatch.setattr(common, "urlopen", raise_http_error)
+    monkeypatch.setattr(http_common, "urlopen", raise_http_error)
 
     with pytest.raises(
         ProviderServiceError,
@@ -140,7 +176,7 @@ def test_post_json_maps_http_error_body_read_failure(monkeypatch) -> None:
 
 
 def test_coerce_embedding_accepts_numeric_list() -> None:
-    assert common.coerce_embedding([1, 2.5]) == (1.0, 2.5)
+    assert coerce_embedding([1, 2.5]) == (1.0, 2.5)
 
 
 @pytest.mark.parametrize(
@@ -156,7 +192,7 @@ def test_coerce_embedding_rejects_non_numeric_items(vector) -> None:
         ProviderServiceError,
         match="embedding response items must be numeric lists",
     ):
-        common.coerce_embedding(vector)
+        coerce_embedding(vector)
 
 
 @pytest.mark.parametrize("vector", [[float("nan")], [float("inf")]])
@@ -165,7 +201,7 @@ def test_coerce_embedding_rejects_non_finite_values(vector) -> None:
         ProviderServiceError,
         match="embedding values must be finite numbers",
     ):
-        common.coerce_embedding(vector)
+        coerce_embedding(vector)
 
 
 def test_ollama_embedding_client_parses_embeddings(monkeypatch) -> None:
@@ -175,9 +211,10 @@ def test_ollama_embedding_client_parses_embeddings(monkeypatch) -> None:
         {"embeddings": [[1, 2.5], [3.0, 4]]},
     )
     client = ollama.OllamaEmbeddingClient(
-        model="embedding-model",
-        base_url="http://localhost:11434",
-        endpoint="/api/embed",
+        _ollama_endpoint(
+            model="embedding-model",
+            endpoint="/api/embed",
+        )
     )
 
     assert client.embed_texts(["one", "two"]) == ((1.0, 2.5), (3.0, 4.0))
@@ -189,9 +226,10 @@ def test_ollama_embedding_client_requires_embeddings_list(
 ) -> None:
     _stub_provider_response(monkeypatch, ollama, response)
     client = ollama.OllamaEmbeddingClient(
-        model="embedding-model",
-        base_url="http://localhost:11434",
-        endpoint="/api/embed",
+        _ollama_endpoint(
+            model="embedding-model",
+            endpoint="/api/embed",
+        )
     )
 
     with pytest.raises(
@@ -204,9 +242,10 @@ def test_ollama_embedding_client_requires_embeddings_list(
 def test_ollama_embedding_client_rejects_invalid_embedding_items(monkeypatch) -> None:
     _stub_provider_response(monkeypatch, ollama, {"embeddings": [["1", 2]]})
     client = ollama.OllamaEmbeddingClient(
-        model="embedding-model",
-        base_url="http://localhost:11434",
-        endpoint="/api/embed",
+        _ollama_endpoint(
+            model="embedding-model",
+            endpoint="/api/embed",
+        )
     )
 
     with pytest.raises(
@@ -218,10 +257,11 @@ def test_ollama_embedding_client_rejects_invalid_embedding_items(monkeypatch) ->
 
 def test_ollama_judge_client_parses_response(monkeypatch) -> None:
     _stub_provider_response(monkeypatch, ollama, {"response": '{"score": 1}'})
-    client = ollama.OllamaJudgeClient(
-        model="judge-model",
-        base_url="http://localhost:11434",
-        endpoint="/api/generate",
+    client = ollama.OllamaJsonCompletionClient(
+        _ollama_endpoint(
+            model="judge-model",
+            endpoint="/api/generate",
+        )
     )
 
     assert client.complete_json("judge this") == '{"score": 1}'
@@ -230,10 +270,11 @@ def test_ollama_judge_client_parses_response(monkeypatch) -> None:
 @pytest.mark.parametrize("response", [{}, {"response": {"score": 1}}])
 def test_ollama_judge_client_requires_string_response(monkeypatch, response) -> None:
     _stub_provider_response(monkeypatch, ollama, response)
-    client = ollama.OllamaJudgeClient(
-        model="judge-model",
-        base_url="http://localhost:11434",
-        endpoint="/api/generate",
+    client = ollama.OllamaJsonCompletionClient(
+        _ollama_endpoint(
+            model="judge-model",
+            endpoint="/api/generate",
+        )
     )
 
     with pytest.raises(
@@ -250,9 +291,10 @@ def test_vllm_embedding_client_parses_data_embeddings(monkeypatch) -> None:
         {"data": [{"embedding": [1, 2.5]}, {"embedding": [3.0, 4]}]},
     )
     client = vllm.VLLMEmbeddingClient(
-        model="embedding-model",
-        base_url="http://localhost:8000",
-        endpoint="/v1/embeddings",
+        _vllm_endpoint(
+            model="embedding-model",
+            endpoint="/v1/embeddings",
+        )
     )
 
     assert client.embed_texts(["one", "two"]) == ((1.0, 2.5), (3.0, 4.0))
@@ -262,9 +304,10 @@ def test_vllm_embedding_client_parses_data_embeddings(monkeypatch) -> None:
 def test_vllm_embedding_client_requires_data_list(monkeypatch, response) -> None:
     _stub_provider_response(monkeypatch, vllm, response)
     client = vllm.VLLMEmbeddingClient(
-        model="embedding-model",
-        base_url="http://localhost:8000",
-        endpoint="/v1/embeddings",
+        _vllm_endpoint(
+            model="embedding-model",
+            endpoint="/v1/embeddings",
+        )
     )
 
     with pytest.raises(
@@ -277,9 +320,10 @@ def test_vllm_embedding_client_requires_data_list(monkeypatch, response) -> None
 def test_vllm_embedding_client_requires_object_items(monkeypatch) -> None:
     _stub_provider_response(monkeypatch, vllm, {"data": [[1, 2]]})
     client = vllm.VLLMEmbeddingClient(
-        model="embedding-model",
-        base_url="http://localhost:8000",
-        endpoint="/v1/embeddings",
+        _vllm_endpoint(
+            model="embedding-model",
+            endpoint="/v1/embeddings",
+        )
     )
 
     with pytest.raises(
@@ -292,9 +336,10 @@ def test_vllm_embedding_client_requires_object_items(monkeypatch) -> None:
 def test_vllm_embedding_client_requires_numeric_embedding(monkeypatch) -> None:
     _stub_provider_response(monkeypatch, vllm, {"data": [{"embedding": ["1", 2]}]})
     client = vllm.VLLMEmbeddingClient(
-        model="embedding-model",
-        base_url="http://localhost:8000",
-        endpoint="/v1/embeddings",
+        _vllm_endpoint(
+            model="embedding-model",
+            endpoint="/v1/embeddings",
+        )
     )
 
     with pytest.raises(
@@ -310,10 +355,11 @@ def test_vllm_judge_client_parses_message_content(monkeypatch) -> None:
         vllm,
         {"choices": [{"message": {"content": '{"score": 1}'}}]},
     )
-    client = vllm.VLLMJudgeClient(
-        model="judge-model",
-        base_url="http://localhost:8000",
-        endpoint="/v1/chat/completions",
+    client = vllm.VLLMJsonCompletionClient(
+        _vllm_endpoint(
+            model="judge-model",
+            endpoint="/v1/chat/completions",
+        )
     )
 
     assert client.complete_json("judge this") == '{"score": 1}'
@@ -322,10 +368,11 @@ def test_vllm_judge_client_parses_message_content(monkeypatch) -> None:
 @pytest.mark.parametrize("response", [{}, {"choices": []}, {"choices": "none"}])
 def test_vllm_judge_client_requires_non_empty_choices(monkeypatch, response) -> None:
     _stub_provider_response(monkeypatch, vllm, response)
-    client = vllm.VLLMJudgeClient(
-        model="judge-model",
-        base_url="http://localhost:8000",
-        endpoint="/v1/chat/completions",
+    client = vllm.VLLMJsonCompletionClient(
+        _vllm_endpoint(
+            model="judge-model",
+            endpoint="/v1/chat/completions",
+        )
     )
 
     with pytest.raises(
@@ -337,10 +384,11 @@ def test_vllm_judge_client_requires_non_empty_choices(monkeypatch, response) -> 
 
 def test_vllm_judge_client_requires_object_choice(monkeypatch) -> None:
     _stub_provider_response(monkeypatch, vllm, {"choices": ["not-an-object"]})
-    client = vllm.VLLMJudgeClient(
-        model="judge-model",
-        base_url="http://localhost:8000",
-        endpoint="/v1/chat/completions",
+    client = vllm.VLLMJsonCompletionClient(
+        _vllm_endpoint(
+            model="judge-model",
+            endpoint="/v1/chat/completions",
+        )
     )
 
     with pytest.raises(
@@ -352,10 +400,11 @@ def test_vllm_judge_client_requires_object_choice(monkeypatch) -> None:
 
 def test_vllm_judge_client_requires_message_object(monkeypatch) -> None:
     _stub_provider_response(monkeypatch, vllm, {"choices": [{"message": "none"}]})
-    client = vllm.VLLMJudgeClient(
-        model="judge-model",
-        base_url="http://localhost:8000",
-        endpoint="/v1/chat/completions",
+    client = vllm.VLLMJsonCompletionClient(
+        _vllm_endpoint(
+            model="judge-model",
+            endpoint="/v1/chat/completions",
+        )
     )
 
     with pytest.raises(
@@ -371,10 +420,11 @@ def test_vllm_judge_client_requires_string_content(monkeypatch) -> None:
         vllm,
         {"choices": [{"message": {"content": {"score": 1}}}]},
     )
-    client = vllm.VLLMJudgeClient(
-        model="judge-model",
-        base_url="http://localhost:8000",
-        endpoint="/v1/chat/completions",
+    client = vllm.VLLMJsonCompletionClient(
+        _vllm_endpoint(
+            model="judge-model",
+            endpoint="/v1/chat/completions",
+        )
     )
 
     with pytest.raises(
@@ -422,13 +472,13 @@ def test_vllm_judge_client_defaults_blank_api_key(config_api_key) -> None:
     if config_api_key is not None:
         config["api_key"] = config_api_key
 
-    client = build_vllm_judge_client(config)
+    client = build_vllm_json_completion_client(config)
 
     assert client.api_key == _EXPECTED_VLLM_API_KEY
 
 
 def test_vllm_judge_client_strips_api_key() -> None:
-    client = build_vllm_judge_client(
+    client = build_vllm_json_completion_client(
         {
             "model": "judge-model",
             "base_url": "http://localhost:8000/",

@@ -4,9 +4,9 @@ from vexrag.attack_algorithms.hijackrag.report import (
     HijackRAGCaseResult,
     HijackRAGScanReport,
 )
-from vexrag.core.contracts import ScanVerdict
 from vexrag.core.evaluation import EvaluationResult
-from vexrag.core.target import TargetSystemResponse
+from vexrag.core.scan.types import ScanVerdict
+from vexrag.core.target_systems import TargetSystemResponse
 
 
 def _case(

@@ -13,12 +13,12 @@ from vexrag.attack_algorithms.poisonedrag.schema import (
     PoisonedRAGRequest,
     PoisonedRAGResult,
 )
-from vexrag.core.adversarial_probe import probe_with_poisoning_and_evaluation
-from vexrag.core.attacks.command import ScanCaseReportProtocol
-from vexrag.core.contracts import ScanVerdict
 from vexrag.core.evaluation import Evaluator
-from vexrag.core.retrieval import CorpusPoisoningAdapterProtocol
-from vexrag.core.target import TargetSystemAdapterProtocol
+from vexrag.core.retrieval import CorpusPoisoner
+from vexrag.core.scan.contracts import ScanCaseReport
+from vexrag.core.scan.execution import probe_with_poisoning_and_evaluation
+from vexrag.core.scan.types import ScanVerdict
+from vexrag.core.target_systems import TargetSystemAdapter
 
 LOGGER = logging.getLogger("vexrag.scan.poisonedrag")
 
@@ -45,9 +45,9 @@ class PoisonedRAGScanRunner:
     def __init__(
         self,
         generator: PoisonedRAGGenerator,
-        target_system: TargetSystemAdapterProtocol,
+        target_system: TargetSystemAdapter,
         evaluator: Evaluator,
-        corpus_poisoner: CorpusPoisoningAdapterProtocol | None = None,
+        corpus_poisoner: CorpusPoisoner | None = None,
     ) -> None:
         self.generator = generator
         self.target_system = target_system
@@ -59,7 +59,7 @@ class PoisonedRAGScanRunner:
         requests: Sequence[PoisonedRAGRequest],
         config: PoisonedRAGScanConfig | None = None,
         *,
-        on_case_complete: Callable[[ScanCaseReportProtocol], None] | None = None,
+        on_case_complete: Callable[[ScanCaseReport], None] | None = None,
     ) -> PoisonedRAGScanReport:
         scan_config = config or PoisonedRAGScanConfig()
         if not requests:
@@ -96,7 +96,7 @@ class PoisonedRAGScanRunner:
         case_index: int,
         config: PoisonedRAGScanConfig,
         *,
-        on_case_complete: Callable[[ScanCaseReportProtocol], None] | None = None,
+        on_case_complete: Callable[[ScanCaseReport], None] | None = None,
     ) -> tuple[PoisonedRAGCaseResult, ...]:
         cases: list[PoisonedRAGCaseResult] = []
         for run_index in range(1, config.repetitions + 1):

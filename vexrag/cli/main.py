@@ -11,26 +11,20 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
-from vexrag.attack_algorithms.hijackrag.plugin import HIJACK_PLUGIN
-from vexrag.attack_algorithms.poisonedrag.plugin import POISON_PLUGIN
+from vexrag.attack_algorithms.registries import create_attack_method_registry
 from vexrag.cli.errors import CLIConfigError
 from vexrag.cli.scan_builder import (
     build_scan_command,
     materialize_generate_cases_config,
     resolve_generate_cases_attack,
 )
-from vexrag.core.attacks import GenerateCasesParams
-from vexrag.core.attacks.chain_command import (
+from vexrag.core.attack_configurator import GenerateCasesParams
+from vexrag.core.scan.config import ScanConfigError, deep_merge_mappings
+from vexrag.core.scan.contracts import ScanCaseReport, ScanReport
+from vexrag.core.scan.execution import (
     AttackChainScanReport,
     format_chain_step_summary_lines,
 )
-from vexrag.core.attacks.command import (
-    ScanCaseReportProtocol,
-    ScanReportProtocol,
-)
-from vexrag.core.attacks.registry import AttackRegistry
-from vexrag.core.config import ScanConfigError
-from vexrag.core.config.merge import deep_merge_mappings
 
 LOGGER = logging.getLogger("vexrag.cli")
 FIELD_TEXT_LIMIT = 2_000
@@ -117,9 +111,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Generate PoisonedRAG or HijackRAG cases YAML via the scan config LLM.",
     )
     _add_config_argument(generate_cases)
-    registry = AttackRegistry()
-    registry.register(HIJACK_PLUGIN)
-    registry.register(POISON_PLUGIN)
+    registry = create_attack_method_registry()
     generate_cases_attack_choices = ("auto", *registry.ids())
     generate_cases.add_argument(
         "--attack",
@@ -223,7 +215,7 @@ def _run_scan(args: argparse.Namespace) -> int:
 
     case_ordinal: list[int] = [0]
 
-    def _on_case_complete(case: ScanCaseReportProtocol) -> None:
+    def _on_case_complete(case: ScanCaseReport) -> None:
         case_ordinal[0] += 1
         _print_single_case_detail(
             case_ordinal[0],
@@ -305,9 +297,7 @@ def _run_generate_cases(args: argparse.Namespace) -> int:
             f"output file already exists: {output_path}. Use --overwrite to replace it."
         )
 
-    registry = AttackRegistry()
-    registry.register(HIJACK_PLUGIN)
-    registry.register(POISON_PLUGIN)
+    registry = create_attack_method_registry()
     plugin = registry.get(attack_kind)
     adv = max(1, int(args.adv_per_query))
     params = GenerateCasesParams(
@@ -450,7 +440,7 @@ def _write_yaml(path: Path, content: Mapping[str, Any]) -> None:
 
 
 def _print_report(
-    report: ScanReportProtocol,
+    report: ScanReport,
     *,
     show_raw_responses: bool = False,
     cases_emitted_during_run: bool = False,
@@ -606,7 +596,7 @@ def _model_available(required: str, available: set[str]) -> bool:
 
 
 def _print_report_summary(
-    report: ScanReportProtocol,
+    report: ScanReport,
     *,
     verdict_label: str,
     asr_label: str,
@@ -623,7 +613,7 @@ def _print_report_summary(
 
 
 def _print_case_details(
-    cases: Sequence[ScanCaseReportProtocol],
+    cases: Sequence[ScanCaseReport],
     *,
     show_raw_responses: bool = False,
 ) -> None:
@@ -641,7 +631,7 @@ def _print_case_details(
 
 def _print_single_case_detail(
     case_index: int,
-    case: ScanCaseReportProtocol,
+    case: ScanCaseReport,
     *,
     show_raw_responses: bool = False,
 ) -> None:
@@ -836,7 +826,7 @@ def _truncate_text(text: str, *, limit: int) -> str:
     return f"{text[:limit].rstrip()}... [truncated {omitted} chars]"
 
 
-def _collect_warnings(report: ScanReportProtocol) -> tuple[str, ...]:
+def _collect_warnings(report: ScanReport) -> tuple[str, ...]:
     warnings: list[str] = []
     warnings.extend(report.warnings)
     for case in report.cases:

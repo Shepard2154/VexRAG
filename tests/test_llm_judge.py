@@ -1,8 +1,7 @@
 import pytest
 
-from vexrag.core.evaluation.attack_verdict import JudgeAnswerLabel
+from vexrag.core.evaluation import JudgeAnswerLabel, parse_judge_llm_response
 from vexrag.core.evaluation.errors import JudgeResponseValidationError
-from vexrag.core.evaluation.judge_response_parser import parse_judge_llm_response
 
 
 def test_parse_judge_llm_response_accepts_label_and_reason() -> None:
