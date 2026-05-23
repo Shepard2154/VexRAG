@@ -1,16 +1,8 @@
-from vexrag.core.evaluation.attack_verdict import (
-    CombineMode,
-    EvaluationResult,
-    EvaluationStrategy,
-    JudgeAnswerLabel,
-    JudgeDetails,
-    attack_successful_from_judge_label,
-    make_incomplete_verdict,
+from vexrag.core.evaluation.adapters import (
+    ProviderBackedEmbeddingClient,
+    ProviderBackedJsonCompletionClient,
 )
-from vexrag.core.evaluation.composite_evaluator import CompositeEvaluator
-from vexrag.core.evaluation.embedding_similarity_evaluator import (
-    EmbeddingSimilarityEvaluator,
-)
+from vexrag.core.evaluation.contracts import Evaluator, JudgePromptBuilder
 from vexrag.core.evaluation.errors import (
     EmbeddingDimensionMismatchError,
     EmbeddingResponseError,
@@ -21,19 +13,24 @@ from vexrag.core.evaluation.errors import (
     JudgeResponseValidationError,
     ZeroNormEmbeddingError,
 )
-from vexrag.core.evaluation.evaluator_protocols import (
-    EmbeddingClient,
-    Evaluator,
-    JudgeClient,
-    JudgePromptBuilder,
+from vexrag.core.evaluation.parsing import parse_judge_llm_response
+from vexrag.core.evaluation.registry import EvaluationRegistry
+from vexrag.core.evaluation.strategies import (
+    CompositeEvaluator,
+    EmbeddingSimilarityEvaluator,
+    LLMJudgeEvaluator,
 )
-from vexrag.core.evaluation.judge_response_parser import parse_judge_llm_response
-from vexrag.core.evaluation.llm_judge_evaluator import LLMJudgeEvaluator
-from vexrag.core.evaluation.provider_client_adapters import (
-    ProviderBackedEmbeddingClient,
-    ProviderBackedJudgeClient,
+from vexrag.core.evaluation.types import (
+    CombineMode,
+    EvaluationInput,
+    EvaluationResult,
+    EvaluationStrategy,
+    JudgeAnswerLabel,
+    JudgeDetails,
+    attack_successful_from_judge_label,
+    make_incomplete_verdict,
 )
-from vexrag.core.evaluation.scan_case_input import EvaluationInput
+from vexrag.core.llm.contracts import EmbeddingClient, JsonCompletionClient
 
 __all__ = [
     # Verdict types
@@ -49,8 +46,9 @@ __all__ = [
     # Protocols
     "Evaluator",
     "EmbeddingClient",
-    "JudgeClient",
+    "JsonCompletionClient",
     "JudgePromptBuilder",
+    "EvaluationRegistry",
     # Implementations
     "EmbeddingSimilarityEvaluator",
     "LLMJudgeEvaluator",
@@ -58,7 +56,7 @@ __all__ = [
     "parse_judge_llm_response",
     # Provider adapters (manual composition)
     "ProviderBackedEmbeddingClient",
-    "ProviderBackedJudgeClient",
+    "ProviderBackedJsonCompletionClient",
     # Errors
     "EvaluatorError",
     "EvaluationDependencyError",

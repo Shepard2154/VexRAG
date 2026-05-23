@@ -3,13 +3,11 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
-from ..contracts import CorpusPoisoningError
+from ...errors import CorpusPoisoningError
 
 
 class FileTextPoisoner:
     """file_text corpus: one file per poison chunk."""
-
-    __slots__ = ("path", "filename_prefix")
 
     def __init__(self, path: Path, filename_prefix: str) -> None:
         self.path = path

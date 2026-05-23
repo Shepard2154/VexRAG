@@ -3,10 +3,10 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from vexrag.core.evaluation import EmbeddingClient
+from vexrag.core.llm.contracts import EmbeddingClient
 
+from ...errors import CorpusPoisoningError
 from .._texts import nonempty_stripped_strs
-from ..contracts import CorpusPoisoningError
 from ..embeddings import embed_poison_vectors
 
 
@@ -30,13 +30,6 @@ def _chroma_document_metadatas(
 
 class ChromaPoisoner:
     """Chroma collection add/delete for poisoning."""
-
-    __slots__ = (
-        "_collection",
-        "_owned_ids",
-        "_embedding_client",
-        "_l2_normalize",
-    )
 
     def __init__(
         self,

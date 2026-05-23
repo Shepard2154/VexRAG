@@ -1,12 +1,10 @@
+from vexrag.core.retrieval.contracts import CorpusPoisoner
+from vexrag.core.retrieval.errors import CorpusPoisoningError
 from vexrag.core.retrieval.poisoning.adapters import (
     ChromaPoisoner,
     FaissPoisoner,
     FileTextPoisoner,
     QdrantPoisoner,
-)
-from vexrag.core.retrieval.poisoning.contracts import (
-    CorpusPoisoningAdapterProtocol,
-    CorpusPoisoningError,
 )
 from vexrag.core.retrieval.poisoning.embeddings import (
     embed_poison_vectors,
@@ -15,7 +13,7 @@ from vexrag.core.retrieval.poisoning.embeddings import (
 
 __all__ = [
     "ChromaPoisoner",
-    "CorpusPoisoningAdapterProtocol",
+    "CorpusPoisoner",
     "CorpusPoisoningError",
     "FaissPoisoner",
     "FileTextPoisoner",

@@ -3,10 +3,10 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from vexrag.core.evaluation import EmbeddingClient
+from vexrag.core.llm.contracts import EmbeddingClient
 
+from ...errors import CorpusPoisoningError
 from .._texts import nonempty_stripped_strs
-from ..contracts import CorpusPoisoningError
 from ..embeddings import embed_poison_vectors
 
 
@@ -45,16 +45,6 @@ def _build_qdrant_points(
 
 class QdrantPoisoner:
     """Qdrant upsert/delete for corpus poisoning."""
-
-    __slots__ = (
-        "_client",
-        "_collection",
-        "_vector_name",
-        "_owned_ids",
-        "_embedding_client",
-        "_l2_normalize",
-        "_qmodels",
-    )
 
     def __init__(
         self,

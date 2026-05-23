@@ -1,5 +1,5 @@
-from vexrag.core.evaluation import EmbeddingClient
-from vexrag.core.retrieval.poisoning.contracts import CorpusPoisoningError
+from vexrag.core.llm.contracts import EmbeddingClient
+from vexrag.core.retrieval.errors import CorpusPoisoningError
 
 
 def optional_l2_normalize_batch(

@@ -3,10 +3,10 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from vexrag.core.evaluation import EmbeddingClient
+from vexrag.core.llm.contracts import EmbeddingClient
 
+from ...errors import CorpusPoisoningError
 from .._texts import nonempty_stripped_strs
-from ..contracts import CorpusPoisoningError
 from ..embeddings import embed_poison_vectors
 
 
@@ -99,18 +99,6 @@ def _rebuild_index_without_point_ids(
 
 class FaissPoisoner:
     """FAISS IndexFlatIP corpus append/delete (index.faiss + metadata.json)."""
-
-    __slots__ = (
-        "_dir",
-        "_index_path",
-        "_metadata_path",
-        "_embedding_client",
-        "_l2_normalize",
-        "_owned_ids",
-        "_next_poison_id",
-        "_faiss",
-        "_np",
-    )
 
     def __init__(
         self,
