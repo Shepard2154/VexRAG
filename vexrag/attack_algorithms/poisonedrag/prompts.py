@@ -1,4 +1,4 @@
-from vexrag.core.contracts import TargetStyle
+from vexrag.core.attack_configurator import TargetStyle
 
 PROMPT_VERSION = "poisonedrag-paper-adv-v1"
 

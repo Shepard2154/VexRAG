@@ -1,6 +1,10 @@
 from dataclasses import dataclass, field
 
-from vexrag.core.contracts import CorrectAnswerSource, PoisonedResult, TargetStyle
+from vexrag.core.attack_configurator import (
+    CorrectAnswerSource,
+    PoisonedResult,
+    TargetStyle,
+)
 
 
 @dataclass(slots=True)

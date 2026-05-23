@@ -2,8 +2,8 @@ from collections.abc import Mapping, Sequence
 from typing import Any, Protocol
 
 
-class RetrievalCorpusAdapter(Protocol):
-    """Write adversarial chunks into a retrieval corpus and clean them up."""
+class CorpusPoisoner(Protocol):
+    """Write poison chunks into retrieval storage."""
 
     def add_texts(
         self,

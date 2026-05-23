@@ -2,26 +2,23 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from vexrag.attack_algorithms.hijackrag.plugin import HIJACK_PLUGIN
-from vexrag.attack_algorithms.poisonedrag.plugin import POISON_PLUGIN
-from vexrag.core.attack_plan import (
+from vexrag.attack_algorithms.registries import (
+    create_attack_method_registry,
+    create_scan_registries,
+)
+from vexrag.core.scan.builder import build_evaluator as assemble_evaluator
+from vexrag.core.scan.config import (
+    ScanConfigError,
     materialize_config_for_attack_id,
     materialize_step_config,
     parse_attack_steps,
     resolve_generate_cases_attack_id,
 )
-from vexrag.core.attacks.chain_command import AttackChainScanCommand
-from vexrag.core.attacks.command import (
-    ScanCommandProtocol,
+from vexrag.core.scan.contracts import ScanCommand
+from vexrag.core.scan.execution import (
+    AttackChainScanCommand,
+    probe_scan_llms_for_materialized_config,
 )
-from vexrag.core.attacks.registry import AttackRegistry
-from vexrag.core.config import ScanConfigError
-from vexrag.core.config.build import (
-    build_evaluator as assemble_evaluator,
-)
-from vexrag.core.llm_scan_probe import probe_scan_llms_for_materialized_config
-
-ScanCommand = ScanCommandProtocol
 
 
 def build_scan_command(
@@ -29,14 +26,13 @@ def build_scan_command(
     *,
     base_dir: Path | None = None,
     attack: str | None = None,
-) -> ScanCommandProtocol:
-    registry = AttackRegistry()
-    registry.register(HIJACK_PLUGIN)
-    registry.register(POISON_PLUGIN)
-    steps = parse_attack_steps(config, registry)
+) -> ScanCommand:
+    attack_methods = create_attack_method_registry()
+    registries = create_scan_registries(base_dir=base_dir)
+    steps = parse_attack_steps(config, attack_methods)
     if attack is not None:
         aid = str(attack).strip().lower()
-        registry.get(aid)
+        attack_methods.get(aid)
         filtered = tuple(s for s in steps if s.attack_id == aid)
         if not filtered:
             raise ScanConfigError(f"no attack step with id {aid!r} in attacks list")
@@ -46,24 +42,26 @@ def build_scan_command(
         probe_scan_llms_for_materialized_config(
             materialized,
             attack_id=steps[0].attack_id,
+            registries=registries,
             step_label=f"attack step ({steps[0].attack_id})",
         )
-        return registry.get(steps[0].attack_id).build_scan_command(
+        return attack_methods.get(steps[0].attack_id).build_scan_command(
             materialized,
             base_dir,
         )
-    built: list[tuple[str, ScanCommandProtocol]] = []
+    built: list[tuple[str, ScanCommand]] = []
     for step_index, step in enumerate(steps, start=1):
         materialized = materialize_step_config(config, step)
         probe_scan_llms_for_materialized_config(
             materialized,
             attack_id=step.attack_id,
+            registries=registries,
             step_label=f"chain step {step_index}/{len(steps)} ({step.attack_id})",
         )
         built.append(
             (
                 step.attack_id,
-                registry.get(step.attack_id).build_scan_command(
+                attack_methods.get(step.attack_id).build_scan_command(
                     materialized,
                     base_dir,
                 ),
@@ -73,10 +71,8 @@ def build_scan_command(
 
 
 def resolve_attack_method(config: Mapping[str, Any]) -> str:
-    registry = AttackRegistry()
-    registry.register(HIJACK_PLUGIN)
-    registry.register(POISON_PLUGIN)
-    steps = parse_attack_steps(config, registry)
+    attack_methods = create_attack_method_registry()
+    steps = parse_attack_steps(config, attack_methods)
     return ",".join(step.attack_id for step in steps)
 
 
@@ -85,10 +81,12 @@ def resolve_generate_cases_attack(
     *,
     explicit: str | None,
 ) -> str:
-    registry = AttackRegistry()
-    registry.register(HIJACK_PLUGIN)
-    registry.register(POISON_PLUGIN)
-    return resolve_generate_cases_attack_id(config, registry, explicit=explicit)
+    attack_methods = create_attack_method_registry()
+    return resolve_generate_cases_attack_id(
+        config,
+        attack_methods,
+        explicit=explicit,
+    )
 
 
 def build_evaluator(
@@ -96,13 +94,12 @@ def build_evaluator(
     *,
     attack: str | None = None,
 ) -> Any:
-    registry = AttackRegistry()
-    registry.register(HIJACK_PLUGIN)
-    registry.register(POISON_PLUGIN)
-    steps = parse_attack_steps(config, registry)
+    attack_methods = create_attack_method_registry()
+    registries = create_scan_registries()
+    steps = parse_attack_steps(config, attack_methods)
     if attack is not None:
         aid = str(attack).strip().lower()
-        registry.get(aid)
+        attack_methods.get(aid)
         selected = tuple(s for s in steps if s.attack_id == aid)
         if not selected:
             raise ScanConfigError(f"no attack step with id {aid!r} in attacks list")
@@ -117,7 +114,7 @@ def build_evaluator(
     return assemble_evaluator(
         materialized,
         attack_id=step.attack_id,
-        registry=registry,
+        registries=registries,
     )
 
 
@@ -127,7 +124,9 @@ def materialize_generate_cases_config(
     attack_id: str,
 ) -> dict[str, Any]:
     """Return a single-attack config for ``generate_cases`` / plugin generators."""
-    registry = AttackRegistry()
-    registry.register(HIJACK_PLUGIN)
-    registry.register(POISON_PLUGIN)
-    return materialize_config_for_attack_id(config, attack_id, registry=registry)
+    attack_methods = create_attack_method_registry()
+    return materialize_config_for_attack_id(
+        config,
+        attack_id,
+        registry=attack_methods,
+    )

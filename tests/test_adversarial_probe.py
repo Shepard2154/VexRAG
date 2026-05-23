@@ -1,8 +1,8 @@
 from typing import Any
 
-from vexrag.core.adversarial_probe import probe_with_poisoning_and_evaluation
 from vexrag.core.evaluation import EvaluationInput, EvaluationResult
-from vexrag.core.target import TargetSystemQuery, TargetSystemResponse
+from vexrag.core.scan.execution import probe_with_poisoning_and_evaluation
+from vexrag.core.target_systems import TargetSystemQuery, TargetSystemResponse
 
 
 class _FakeEval:
@@ -37,7 +37,7 @@ def test_probe_runs_target_and_evaluation_without_corpus() -> None:
         correct_answer="clean",
         incorrect_answer="bad",
         adversarial_texts=("ctx1",),
-        corpus_adapter=None,
+        corpus_poisoner=None,
         target_system=target,
         evaluator=evaluation,
         override_contexts=False,

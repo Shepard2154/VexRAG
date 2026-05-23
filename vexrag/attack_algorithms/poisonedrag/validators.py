@@ -2,40 +2,28 @@ import random
 import re
 from typing import Any
 
-from vexrag.core.llm_response_validation import (
-    LLMPayloadValidationError,
-)
-from vexrag.core.llm_response_validation import (
-    coerce_payload_to_dict as _coerce_payload_to_dict,
-)
-from vexrag.core.llm_response_validation import (
-    validate_correct_answer_payload as _core_validate_correct_answer,
-)
+from vexrag.core.llm import json_validation
+from vexrag.core.llm.json_validation import LLMPayloadValidationError
 
 
 class PoisonedRAGValidationError(LLMPayloadValidationError):
     """Raised when an LLM payload does not match expected schema."""
 
 
-def coerce_payload_to_dict(payload: Any) -> dict[str, Any]:
-    """Convert payload to dictionary, accepting dict or JSON string."""
-    try:
-        return _coerce_payload_to_dict(payload)
-    except LLMPayloadValidationError as exc:
-        raise PoisonedRAGValidationError(str(exc)) from exc
-
-
 def validate_correct_answer_payload(payload: Any) -> str:
     """Extract stage-1 correct answer from payload."""
     try:
-        return _core_validate_correct_answer(payload)
+        return json_validation.validate_correct_answer_payload(payload)
     except LLMPayloadValidationError as exc:
         raise PoisonedRAGValidationError(str(exc)) from exc
 
 
 def validate_poison_payload(payload: Any) -> tuple[str, list[str]]:
     """Extract stage-2 incorrect answer and adversarial texts from payload."""
-    data = coerce_payload_to_dict(payload)
+    try:
+        data = json_validation.coerce_payload_to_dict(payload)
+    except LLMPayloadValidationError as exc:
+        raise PoisonedRAGValidationError(str(exc)) from exc
 
     incorrect_answer = _first_present_string(
         data,

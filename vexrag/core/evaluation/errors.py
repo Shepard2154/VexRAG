@@ -1,4 +1,7 @@
-class EvaluatorError(Exception):
+from vexrag.core.exceptions import VexRAGCoreError
+
+
+class EvaluatorError(VexRAGCoreError):
     """Base exception for evaluation-layer failures."""
 
 

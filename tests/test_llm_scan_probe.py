@@ -1,7 +1,7 @@
 import pytest
 
-from vexrag.core.llm_scan_probe import _probe_complete_json
-from vexrag.core.providers.errors import ProviderServiceError
+from vexrag.core.llm.providers.errors import ProviderServiceError
+from vexrag.core.scan.execution import probe_complete_json
 
 
 class _FailingLLM:
@@ -11,7 +11,7 @@ class _FailingLLM:
 
 def test_probe_complete_json_wraps_provider_service_error() -> None:
     with pytest.raises(ProviderServiceError, match="LLM unavailable for scan"):
-        _probe_complete_json(_FailingLLM(), role="unit test")
+        probe_complete_json(_FailingLLM(), role="unit test")
 
 
 class _UnexpectedFailingLLM:
@@ -21,4 +21,4 @@ class _UnexpectedFailingLLM:
 
 def test_probe_complete_json_propagates_unexpected_errors() -> None:
     with pytest.raises(RuntimeError, match="simulated LLM failure"):
-        _probe_complete_json(_UnexpectedFailingLLM(), role="unit test")
+        probe_complete_json(_UnexpectedFailingLLM(), role="unit test")

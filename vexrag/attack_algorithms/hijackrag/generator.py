@@ -13,9 +13,12 @@ from vexrag.attack_algorithms.hijackrag.segments import (
     apply_hijack_insert,
     load_hijack_segments,
 )
-from vexrag.core.contracts import CorrectAnswerProviderProtocol, LLMClientProtocol
-from vexrag.core.correct_answer_prompt import build_correct_answer_prompt
-from vexrag.core.llm_response_validation import validate_correct_answer_payload
+from vexrag.core.attack_configurator import CorrectAnswerProvider
+from vexrag.core.llm import (
+    JsonCompletionClient,
+    build_correct_answer_prompt,
+    validate_correct_answer_payload,
+)
 
 PROMPT_VERSION = "hijackrag-segments-v1"
 
@@ -26,8 +29,8 @@ class HijackRAGGenerator:
     def __init__(
         self,
         segments: Sequence[HijackSegmentRecord],
-        llm_client: LLMClientProtocol,
-        correct_answer_provider: CorrectAnswerProviderProtocol | None = None,
+        llm_client: JsonCompletionClient,
+        correct_answer_provider: CorrectAnswerProvider | None = None,
         prompt_version: str = PROMPT_VERSION,
     ) -> None:
         self._segments = tuple(segments)
@@ -42,8 +45,8 @@ class HijackRAGGenerator:
     def from_segments_file(
         cls,
         path: Path,
-        llm_client: LLMClientProtocol,
-        correct_answer_provider: CorrectAnswerProviderProtocol | None = None,
+        llm_client: JsonCompletionClient,
+        correct_answer_provider: CorrectAnswerProvider | None = None,
     ) -> "HijackRAGGenerator":
         return cls(
             load_hijack_segments(path),

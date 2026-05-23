@@ -1,18 +1,15 @@
 import pytest
 
-from vexrag.attack_algorithms.hijackrag.plugin import HIJACK_PLUGIN
-from vexrag.core.attacks.registry import AttackRegistry
-from vexrag.core.config.build import build_evaluator
-from vexrag.core.evaluation.embedding_similarity_evaluator import (
+from vexrag.attack_algorithms.registries import create_scan_registries
+from vexrag.core.evaluation import (
     EmbeddingSimilarityEvaluator,
-)
-from vexrag.core.evaluation.errors import EvaluationDependencyError
-from vexrag.core.evaluation.llm_judge_evaluator import LLMJudgeEvaluator
-from vexrag.core.evaluation.provider_client_adapters import (
+    EvaluationDependencyError,
+    LLMJudgeEvaluator,
     ProviderBackedEmbeddingClient,
-    ProviderBackedJudgeClient,
+    ProviderBackedJsonCompletionClient,
 )
-from vexrag.core.providers.errors import ProviderServiceError
+from vexrag.core.llm.providers.errors import ProviderServiceError
+from vexrag.core.scan.builder import build_evaluator
 
 
 class _FailingEmbeddingClient:
@@ -33,15 +30,14 @@ def test_provider_backed_embedding_client_maps_provider_error() -> None:
 
 
 def test_provider_backed_judge_client_maps_provider_error() -> None:
-    client = ProviderBackedJudgeClient(_FailingJudgeClient())
+    client = ProviderBackedJsonCompletionClient(_FailingJudgeClient())
     with pytest.raises(EvaluationDependencyError, match="judge down") as exc_info:
         client.complete_json("prompt")
     assert isinstance(exc_info.value.__cause__, ProviderServiceError)
 
 
 def test_build_evaluator_wraps_provider_clients() -> None:
-    reg = AttackRegistry()
-    reg.register(HIJACK_PLUGIN)
+    registries = create_scan_registries()
     emb = {
         "provider": "ollama",
         "base_url": "http://localhost:11434",
@@ -61,7 +57,11 @@ def test_build_evaluator_wraps_provider_clients() -> None:
             "embedding_similarity": {"metric": "cosine"},
         },
     }
-    embedding_eval = build_evaluator(embedding_cfg, attack_id="hijackrag", registry=reg)
+    embedding_eval = build_evaluator(
+        embedding_cfg,
+        attack_id="hijackrag",
+        registries=registries,
+    )
     assert isinstance(embedding_eval, EmbeddingSimilarityEvaluator)
     assert isinstance(embedding_eval.embedding_client, ProviderBackedEmbeddingClient)
 
@@ -71,6 +71,8 @@ def test_build_evaluator_wraps_provider_clients() -> None:
             "judge_client": judge,
         },
     }
-    judge_eval = build_evaluator(judge_cfg, attack_id="hijackrag", registry=reg)
+    judge_eval = build_evaluator(
+        judge_cfg, attack_id="hijackrag", registries=registries
+    )
     assert isinstance(judge_eval, LLMJudgeEvaluator)
-    assert isinstance(judge_eval.judge_client, ProviderBackedJudgeClient)
+    assert isinstance(judge_eval.judge_client, ProviderBackedJsonCompletionClient)

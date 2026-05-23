@@ -1,14 +1,5 @@
-class RetrievalCorpusError(RuntimeError):
-    """Retrieval corpus I/O failure."""
+from vexrag.core.exceptions import DependencyServiceError
 
 
-class RetrievalCorpusDependencyError(RetrievalCorpusError):
-    """Required retrieval backend dependency is unavailable."""
-
-
-class RetrievalCorpusBackendError(RetrievalCorpusError):
-    """Retrieval backend operation failed."""
-
-
-class RetrievalCorpusPersistenceError(RetrievalCorpusError):
-    """Retrieval corpus persistence operation failed."""
+class CorpusPoisoningError(DependencyServiceError):
+    """Corpus poisoning I/O failure."""
