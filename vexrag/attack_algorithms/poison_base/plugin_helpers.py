@@ -33,7 +33,10 @@ def build_attack_llm_client(
         else create_default_llm_provider_registry()
     )
     return JSONGenerationLLMClientAdapter(
-        providers.build_json_completion_client(llm_client_config)
+        providers.build_json_completion_client(
+            llm_client_config,
+            config_prefix=f"attack.{attack_id}.llm_client",
+        )
     )
 
 
@@ -52,6 +55,7 @@ def load_attack_case_configs(
             attack_config.get("case_files", ()),
             f"attack.{attack_id}.case_files",
         ),
+        # TODO: Is it really necessary?
         *path_strings_from_value(
             attack_config.get("cases_file", ()),
             f"attack.{attack_id}.cases_file",

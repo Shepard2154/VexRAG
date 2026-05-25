@@ -1,8 +1,15 @@
 import logging
 from collections.abc import Callable, Sequence
 from time import perf_counter
-from typing import Any
+from typing import Any, Generic
 
+from vexrag.attack_algorithms.poison_base.contracts import (
+    CorpusPoisonGenerationResult,
+    CorpusPoisonGenerator,
+    CorpusPoisonRequest,
+    RequestT,
+    ResultT,
+)
 from vexrag.attack_algorithms.poison_base.profile import CorpusPoisonScanProfile
 from vexrag.attack_algorithms.poison_base.report import (
     CorpusPoisonCaseResult,
@@ -17,14 +24,14 @@ from vexrag.core.scan.types import ScanVerdict
 from vexrag.core.target_systems import TargetSystemAdapter
 
 
-class CorpusPoisonScanRunner:
+class CorpusPoisonScanRunner(Generic[RequestT, ResultT]):
     """Orchestrates corpus-poison generation and target-system checks."""
 
     def __init__(
         self,
         *,
         profile: CorpusPoisonScanProfile,
-        generator: Any,
+        generator: CorpusPoisonGenerator[RequestT],
         target_system: TargetSystemAdapter,
         evaluator: Evaluator,
         corpus_poisoner: CorpusPoisoner | None = None,
@@ -38,7 +45,7 @@ class CorpusPoisonScanRunner:
 
     def run(
         self,
-        requests: Sequence[Any],
+        requests: Sequence[RequestT],
         config: CorpusPoisonScanConfig | None = None,
         *,
         on_case_complete: Callable[[ScanCaseReport], None] | None = None,
@@ -48,7 +55,7 @@ class CorpusPoisonScanRunner:
             raise ValueError(self._profile.empty_requests_error)
 
         cases: list[CorpusPoisonCaseResult] = []
-        generated_results: list[Any] = []
+        generated_results: list[ResultT] = []
         for case_index, request in enumerate(requests, start=1):
             case_label = request.case_id or f"#{case_index}"
             self._logger.info(
@@ -78,8 +85,8 @@ class CorpusPoisonScanRunner:
 
     def _run_cases(
         self,
-        generated: Any,
-        request: Any,
+        generated: ResultT,
+        request: RequestT,
         case_index: int,
         config: CorpusPoisonScanConfig,
         *,
@@ -111,8 +118,8 @@ class CorpusPoisonScanRunner:
     def _run_case(
         self,
         *,
-        generated: Any,
-        request: Any,
+        generated: CorpusPoisonGenerationResult,
+        request: CorpusPoisonRequest,
         adversarial_texts: tuple[str, ...],
         case_index: int,
         run_index: int,
@@ -163,7 +170,7 @@ class CorpusPoisonScanRunner:
 
     def _build_report(
         self,
-        generated_results: tuple[Any, ...],
+        generated_results: tuple[ResultT, ...],
         cases: tuple[CorpusPoisonCaseResult, ...],
         config: CorpusPoisonScanConfig,
     ) -> CorpusPoisonScanReport:
@@ -209,8 +216,8 @@ class CorpusPoisonScanRunner:
     def _case_metadata(
         self,
         *,
-        request: Any,
-        generated: Any,
+        request: CorpusPoisonRequest,
+        generated: CorpusPoisonGenerationResult,
         case_index: int,
         run_index: int,
         adversarial_text_count: int,

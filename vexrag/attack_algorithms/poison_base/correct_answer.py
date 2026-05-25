@@ -16,6 +16,7 @@ def resolve_correct_answer(
     validate_payload: Callable[[Any], str],
     warnings: list[str],
 ) -> tuple[str, str]:
+    """Resolve correct_answer and its source using one of: provided, target-system, or LLM fallback."""
     if provided_answer and provided_answer.strip():
         return provided_answer.strip(), "provided"
 
