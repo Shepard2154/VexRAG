@@ -48,7 +48,10 @@ def probe_scan_llms_for_materialized_config(
     label = step_label if step_label is not None else f"attack step ({attack_id})"
     attack_conf = attack_section(config, attack_id)
     llm_cfg = attack_llm_client_section(config, attack_conf, attack=attack_id)
-    attack_client = registries.llm_providers.build_json_completion_client(llm_cfg)
+    attack_client = registries.llm_providers.build_json_completion_client(
+        llm_cfg,
+        config_prefix=f"attack.{attack_id}.llm_client",
+    )
     probe_complete_json(attack_client, role=f"{label} - generator")
 
     evaluation = build_evaluator(

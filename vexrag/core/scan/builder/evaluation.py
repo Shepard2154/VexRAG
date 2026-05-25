@@ -107,7 +107,10 @@ def build_llm_judge_evaluator(
     prompt_builder = resolve_judge_prompt_builder(registries, attack_id)
     return LLMJudgeEvaluator(
         judge_client=ProviderBackedJsonCompletionClient(
-            registries.llm_providers.build_json_completion_client(judge_config)
+            registries.llm_providers.build_json_completion_client(
+                judge_config,
+                config_prefix="judge_client",
+            )
         ),
         prompt_builder=prompt_builder,
     )

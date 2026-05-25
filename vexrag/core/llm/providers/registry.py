@@ -27,13 +27,15 @@ class LLMProviderRegistry:
     def build_json_completion_client(
         self,
         config: Mapping[str, Any],
+        *,
+        config_prefix: str = "llm_client",
     ) -> JsonCompletionClient:
-        provider = _provider_name(config, "judge_client")
+        provider = _provider_name(config, config_prefix)
         try:
             builder = self.json_completion_builders[provider]
         except KeyError as err:
             raise ProviderConfigError(
-                f"judge_client.provider is not supported: {provider}"
+                f"{config_prefix}.provider is not supported: {provider}"
             ) from err
         return builder(config)
 
