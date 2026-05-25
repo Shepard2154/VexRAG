@@ -2,6 +2,10 @@ import re
 from typing import Any
 
 from vexrag.attack_algorithms.hijackrag.schema import HijackRAGRequest
+from vexrag.attack_algorithms.poison_base.case_validation import (
+    normalize_case_id,
+    required_text,
+)
 from vexrag.core.attack_configurator import TargetStyle
 from vexrag.core.llm import (
     JsonCompletionClient,
@@ -162,14 +166,19 @@ def _extract_raw_cases(data: dict[str, Any], *, expected_count: int) -> list[Any
 
 
 def _validate_case_record(raw_case: dict[str, object]) -> dict[str, str]:
-    query = _required_text(raw_case.get("query"), field="query")
-    correct_answer = _required_text(
+    query = required_text(
+        raw_case.get("query"),
+        field="query",
+        error_type=AutomaticHijackCaseGenerationError,
+    )
+    correct_answer = required_text(
         raw_case.get("correct_answer"),
         field="correct_answer",
+        error_type=AutomaticHijackCaseGenerationError,
     )
     hijack_insert = _required_hijack_insert(raw_case.get("hijack_insert"))
     raw_id = raw_case.get("id")
-    case_id = _normalize_case_id(raw_id if isinstance(raw_id, str) else query)
+    case_id = normalize_case_id(raw_id if isinstance(raw_id, str) else query)
     return {
         "id": case_id,
         "query": query,
@@ -188,25 +197,14 @@ def _is_duplicate_case(
 
 
 def _required_hijack_insert(value: object) -> str:
-    text = _required_text(value, field="hijack_insert")
+    text = required_text(
+        value,
+        field="hijack_insert",
+        error_type=AutomaticHijackCaseGenerationError,
+    )
     if not _HIJACK_INSERT_RE.match(text):
         raise AutomaticHijackCaseGenerationError(
             "Field 'hijack_insert' must match SCREAMING_SNAKE_CASE (A-Z then A-Z0-9_), "
             f"length 5-64; got {text!r}"
         )
     return text
-
-
-def _required_text(value: object, *, field: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise AutomaticHijackCaseGenerationError(
-            f"Field '{field}' must be a non-empty string."
-        )
-    return value.strip()
-
-
-def _normalize_case_id(value: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "_", value.strip().casefold()).strip("_")
-    if not slug:
-        return "generated_case"
-    return slug[:64]

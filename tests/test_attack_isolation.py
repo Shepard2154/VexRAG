@@ -3,6 +3,8 @@
 import ast
 from pathlib import Path
 
+_SHARED_PACKAGES = frozenset({"poison_base"})
+
 
 def _attack_subpackages(repo_root: Path) -> dict[str, Path]:
     root = repo_root / "vexrag" / "attack_algorithms"
@@ -27,7 +29,11 @@ def _imports_other_attack(
             prefix = "vexrag.attack_algorithms."
             if mod.startswith(prefix):
                 foreign = mod[len(prefix) :].split(".", 1)[0]
-                if foreign != package_name and foreign in others:
+                if (
+                    foreign != package_name
+                    and foreign in others
+                    and foreign not in _SHARED_PACKAGES
+                ):
                     violations.append(f"from {mod}")
         elif isinstance(node, ast.Import):
             for alias in node.names:
@@ -35,7 +41,11 @@ def _imports_other_attack(
                 prefix = "vexrag.attack_algorithms."
                 if name.startswith(prefix):
                     foreign = name[len(prefix) :].split(".", 1)[0]
-                    if foreign != package_name and foreign in others:
+                    if (
+                        foreign != package_name
+                        and foreign in others
+                        and foreign not in _SHARED_PACKAGES
+                    ):
                         violations.append(f"import {name}")
     return violations
 

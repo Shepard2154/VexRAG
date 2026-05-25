@@ -1,6 +1,9 @@
-import re
 from typing import Any
 
+from vexrag.attack_algorithms.poison_base.case_validation import (
+    normalize_case_id,
+    required_text,
+)
 from vexrag.attack_algorithms.poisonedrag.schema import PoisonedRAGRequest
 from vexrag.core.attack_configurator import TargetStyle
 from vexrag.core.llm import (
@@ -119,17 +122,23 @@ def _validate_cases_payload(
     for raw_case in raw_cases:
         if not isinstance(raw_case, dict):
             continue
-        query = _required_text(raw_case.get("query"), field="query")
-        correct_answer = _required_text(
+        query = required_text(
+            raw_case.get("query"),
+            field="query",
+            error_type=AutomaticCaseGenerationError,
+        )
+        correct_answer = required_text(
             raw_case.get("correct_answer"),
             field="correct_answer",
+            error_type=AutomaticCaseGenerationError,
         )
-        target_incorrect_answer = _required_text(
+        target_incorrect_answer = required_text(
             raw_case.get("target_incorrect_answer"),
             field="target_incorrect_answer",
+            error_type=AutomaticCaseGenerationError,
         )
         raw_id = raw_case.get("id")
-        case_id = _normalize_case_id(raw_id if isinstance(raw_id, str) else query)
+        case_id = normalize_case_id(raw_id if isinstance(raw_id, str) else query)
         if case_id in by_case_id:
             continue
         by_case_id[case_id] = {
@@ -147,18 +156,3 @@ def _validate_cases_payload(
             f"Could not validate {expected_count} unique cases from model output."
         )
     return validated
-
-
-def _required_text(value: object, *, field: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise AutomaticCaseGenerationError(
-            f"Field '{field}' must be a non-empty string."
-        )
-    return value.strip()
-
-
-def _normalize_case_id(value: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "_", value.strip().casefold()).strip("_")
-    if not slug:
-        return "generated_case"
-    return slug[:64]

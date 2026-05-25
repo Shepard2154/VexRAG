@@ -2,6 +2,13 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from vexrag.attack_algorithms.poison_base.plugin_helpers import (
+    build_attack_llm_client,
+    load_attack_case_configs,
+)
+from vexrag.attack_algorithms.poison_base.scan_config import (
+    build_corpus_poison_scan_config,
+)
 from vexrag.attack_algorithms.poisonedrag.case_generator import (
     AutomaticPoisonedRAGCaseGenerator,
 )
@@ -9,10 +16,7 @@ from vexrag.attack_algorithms.poisonedrag.evaluation import (
     PoisonedRAGJudgePromptBuilder,
 )
 from vexrag.attack_algorithms.poisonedrag.generator import PoisonedRAGGenerator
-from vexrag.attack_algorithms.poisonedrag.scan import (
-    PoisonedRAGScanConfig,
-    PoisonedRAGScanRunner,
-)
+from vexrag.attack_algorithms.poisonedrag.scan import PoisonedRAGScanRunner
 from vexrag.attack_algorithms.poisonedrag.schema import PoisonedRAGRequest
 from vexrag.attack_algorithms.registries import create_scan_registries
 from vexrag.core.attack_configurator.types import (
@@ -20,18 +24,11 @@ from vexrag.core.attack_configurator.types import (
     GenerateCasesParams,
 )
 from vexrag.core.base_configuration import ConfigAccessor
-from vexrag.core.llm import JSONGenerationLLMClientAdapter
-from vexrag.core.llm.providers.defaults import create_default_llm_provider_registry
 from vexrag.core.scan.builder import (
-    attack_llm_client_section,
     attack_section,
     build_corpus_poisoner,
     build_evaluator,
     build_target_system,
-    case_configs_from_value,
-    cleanup_option,
-    load_case_configs,
-    path_strings_from_value,
     poisoning_style_option,
     target_style_option,
 )
@@ -44,28 +41,6 @@ from vexrag.core.target_systems import (
 )
 
 
-def _build_poison_llm_client(
-    config: Mapping[str, Any],
-    *,
-    attack_config: Mapping[str, Any] | None = None,
-    registries: ScanRegistries | None = None,
-) -> JSONGenerationLLMClientAdapter:
-    resolved_attack_config = attack_config or attack_section(config, "poisonedrag")
-    llm_client_config = attack_llm_client_section(
-        config,
-        resolved_attack_config,
-        attack="poisonedrag",
-    )
-    providers = (
-        registries.llm_providers
-        if registries is not None
-        else create_default_llm_provider_registry()
-    )
-    return JSONGenerationLLMClientAdapter(
-        providers.build_json_completion_client(llm_client_config)
-    )
-
-
 def build_poisonedrag_generator(
     config: Mapping[str, Any],
     *,
@@ -73,8 +48,9 @@ def build_poisonedrag_generator(
     registries: ScanRegistries | None = None,
 ) -> PoisonedRAGGenerator:
     attack_conf = attack_section(config, "poisonedrag")
-    llm_client = _build_poison_llm_client(
+    llm_client = build_attack_llm_client(
         config,
+        attack_id="poisonedrag",
         attack_config=attack_conf,
         registries=registries,
     )
@@ -96,10 +72,11 @@ def build_poisonedrag_requests(
     base_dir: Path | None = None,
 ) -> tuple[PoisonedRAGRequest, ...]:
     attack_conf = attack_section(config, "poisonedrag")
-    case_configs = [
-        *_inline_case_configs_poison(attack_conf),
-        *_case_file_configs_poison(attack_conf, base_dir=base_dir),
-    ]
+    case_configs = load_attack_case_configs(
+        attack_conf,
+        attack_id="poisonedrag",
+        base_dir=base_dir,
+    )
     if not case_configs:
         raise ScanConfigError(
             "attack.poisonedrag.cases or attack.poisonedrag.case_files "
@@ -158,53 +135,6 @@ def _build_poisonedrag_request(
     )
 
 
-def _inline_case_configs_poison(
-    attack_config: Mapping[str, Any],
-) -> tuple[Mapping[str, Any], ...]:
-    raw_cases = attack_config.get("cases", ())
-    return case_configs_from_value(raw_cases, "attack.poisonedrag.cases")
-
-
-def _case_file_configs_poison(
-    attack_config: Mapping[str, Any],
-    *,
-    base_dir: Path | None,
-) -> tuple[Mapping[str, Any], ...]:
-    file_paths = [
-        *path_strings_from_value(
-            attack_config.get("case_files", ()),
-            "attack.poisonedrag.case_files",
-        ),
-        *path_strings_from_value(
-            attack_config.get("cases_file", ()),
-            "attack.poisonedrag.cases_file",
-        ),
-    ]
-    cases: list[Mapping[str, Any]] = []
-    for file_path in file_paths:
-        cases.extend(load_case_configs(file_path, base_dir=base_dir))
-    return tuple(cases)
-
-
-def build_poisonedrag_scan_config(config: Mapping[str, Any]) -> PoisonedRAGScanConfig:
-    scan_config = config.get("scan", {})
-    if not isinstance(scan_config, Mapping):
-        raise ScanConfigError("scan must be a mapping")
-    scan_config_accessor = ConfigAccessor(
-        scan_config,
-        prefix="scan",
-        error_type=ScanConfigError,
-    )
-    return PoisonedRAGScanConfig(
-        repetitions=scan_config_accessor.get_optional_int("repetitions", 1),
-        attack_success_rate_threshold=scan_config_accessor.get_optional_float(
-            "attack_success_rate_threshold", 0.0
-        ),
-        override_contexts=scan_config_accessor.get_bool("override_contexts", False),
-        cleanup=cleanup_option(scan_config),
-    )
-
-
 def _build_scan_command(
     config: Mapping[str, Any],
     base_dir: Path | None = None,
@@ -232,7 +162,7 @@ def _build_scan_command(
             corpus_poisoner=build_corpus_poisoner(config, registries=registries),
         ),
         requests=build_poisonedrag_requests(config, base_dir=base_dir),
-        scan_config=build_poisonedrag_scan_config(config),
+        scan_config=build_corpus_poison_scan_config(config),
     )
 
 
@@ -240,13 +170,17 @@ def _build_automatic_case_generator(
     config: Mapping[str, Any],
 ) -> AutomaticPoisonedRAGCaseGenerator:
     attack_conf = attack_section(config, "poisonedrag")
-    llm_client = _build_poison_llm_client(config, attack_config=attack_conf)
+    llm_client = build_attack_llm_client(
+        config,
+        attack_id="poisonedrag",
+        attack_config=attack_conf,
+    )
     return AutomaticPoisonedRAGCaseGenerator(llm_client=llm_client)
 
 
 def _serialize_case_for_yaml(case: Any) -> Mapping[str, str]:
     case_id = str(getattr(case, "case_id", "") or "").strip()
-    query = str(getattr(case, "query", "")).strip()
+    query = str(getattr(case, "query", "") or "").strip()
     correct_answer = str(getattr(case, "correct_answer", "") or "").strip()
     target_incorrect_answer = str(
         getattr(case, "target_incorrect_answer", "") or ""

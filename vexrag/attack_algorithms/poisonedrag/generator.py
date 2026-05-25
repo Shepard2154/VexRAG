@@ -2,6 +2,7 @@ import json
 from collections.abc import Iterable
 from time import perf_counter
 
+from vexrag.attack_algorithms.poison_base.correct_answer import resolve_correct_answer
 from vexrag.attack_algorithms.poisonedrag.prompts import (
     PROMPT_VERSION,
     build_poison_candidates_prompt,
@@ -18,7 +19,7 @@ from vexrag.attack_algorithms.poisonedrag.validators import (
     validate_poison_payload,
 )
 from vexrag.core.attack_configurator import CorrectAnswerProvider
-from vexrag.core.llm import JsonCompletionClient, build_correct_answer_prompt
+from vexrag.core.llm import JsonCompletionClient
 
 
 class PoisonedRAGGenerator:
@@ -68,31 +69,16 @@ class PoisonedRAGGenerator:
         request: PoisonedRAGRequest,
         warnings: list[str],
     ) -> tuple[str, str]:
-        correct_answer = request.correct_answer
-        correct_answer_source = "provided"
-        if correct_answer:
-            return correct_answer, correct_answer_source
-
-        if self.correct_answer_provider is not None:
-            candidate = self.correct_answer_provider.get_correct_answer(
-                request.query,
-                target_style=request.target_style,
-                seed=request.seed,
-            )
-            correct_answer = candidate.strip()
-            if correct_answer:
-                return correct_answer, "target_system"
-            warnings.append(
-                "Target system returned empty correct answer; using LLM fallback."
-            )
-
-        correct_answer_prompt = build_correct_answer_prompt(
+        return resolve_correct_answer(
             query=request.query,
+            provided_answer=request.correct_answer,
             target_style=request.target_style,
+            seed=request.seed,
+            correct_answer_provider=self.correct_answer_provider,
+            llm_client=self.llm_client,
+            validate_payload=validate_correct_answer_payload,
+            warnings=warnings,
         )
-        correct_answer_payload = self.llm_client.complete_json(correct_answer_prompt)
-        correct_answer = validate_correct_answer_payload(correct_answer_payload)
-        return correct_answer, "llm_generated"
 
     def _generate_poison_outputs(
         self,

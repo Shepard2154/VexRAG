@@ -7,31 +7,28 @@ from vexrag.attack_algorithms.hijackrag.case_generator import (
 )
 from vexrag.attack_algorithms.hijackrag.evaluation import HijackRAGJudgePromptBuilder
 from vexrag.attack_algorithms.hijackrag.generator import HijackRAGGenerator
-from vexrag.attack_algorithms.hijackrag.scan import (
-    HijackRAGScanConfig,
-    HijackRAGScanRunner,
-)
+from vexrag.attack_algorithms.hijackrag.scan import HijackRAGScanRunner
 from vexrag.attack_algorithms.hijackrag.schema import HijackRAGRequest
 from vexrag.attack_algorithms.hijackrag.segments import default_hijack_segments_path
+from vexrag.attack_algorithms.poison_base.plugin_helpers import (
+    build_attack_llm_client,
+    load_attack_case_configs,
+)
+from vexrag.attack_algorithms.poison_base.scan_config import (
+    build_corpus_poison_scan_config,
+)
 from vexrag.attack_algorithms.registries import create_scan_registries
 from vexrag.core.attack_configurator.types import (
     AttackMethodConfigurator,
     GenerateCasesParams,
 )
 from vexrag.core.base_configuration import ConfigAccessor
-from vexrag.core.llm import JSONGenerationLLMClientAdapter
-from vexrag.core.llm.providers.defaults import create_default_llm_provider_registry
 from vexrag.core.scan.builder import (
-    attack_llm_client_section,
     attack_section,
     build_corpus_poisoner,
     build_evaluator,
     build_target_system,
-    case_configs_from_value,
-    cleanup_option,
     correct_answer_style_option,
-    load_case_configs,
-    path_strings_from_value,
 )
 from vexrag.core.scan.builder.registries import ScanRegistries
 from vexrag.core.scan.config.errors import ScanConfigError
@@ -62,28 +59,6 @@ def _hijack_segments_path(
     return path
 
 
-def build_hijackrag_llm_client(
-    config: Mapping[str, Any],
-    *,
-    attack_config: Mapping[str, Any] | None = None,
-    registries: ScanRegistries | None = None,
-) -> JSONGenerationLLMClientAdapter:
-    resolved = attack_config or attack_section(config, "hijackrag")
-    llm_client_config = attack_llm_client_section(
-        config,
-        resolved,
-        attack="hijackrag",
-    )
-    providers = (
-        registries.llm_providers
-        if registries is not None
-        else create_default_llm_provider_registry()
-    )
-    return JSONGenerationLLMClientAdapter(
-        providers.build_json_completion_client(llm_client_config)
-    )
-
-
 def build_hijackrag_generator(
     config: Mapping[str, Any],
     *,
@@ -92,8 +67,9 @@ def build_hijackrag_generator(
     registries: ScanRegistries | None = None,
 ) -> HijackRAGGenerator:
     attack_conf = attack_section(config, "hijackrag")
-    llm_client = build_hijackrag_llm_client(
+    llm_client = build_attack_llm_client(
         config,
+        attack_id="hijackrag",
         attack_config=attack_conf,
         registries=registries,
     )
@@ -121,10 +97,11 @@ def build_hijackrag_requests(
     base_dir: Path | None = None,
 ) -> tuple[HijackRAGRequest, ...]:
     attack_conf = attack_section(config, "hijackrag")
-    case_configs = [
-        *_inline_case_configs_hijack(attack_conf),
-        *_case_file_configs_hijack(attack_conf, base_dir=base_dir),
-    ]
+    case_configs = load_attack_case_configs(
+        attack_conf,
+        attack_id="hijackrag",
+        base_dir=base_dir,
+    )
     if not case_configs:
         raise ScanConfigError(
             "attack.hijackrag.cases or attack.hijackrag.case_files "
@@ -211,53 +188,6 @@ def _build_hijackrag_request(
     )
 
 
-def _inline_case_configs_hijack(
-    attack_config: Mapping[str, Any],
-) -> tuple[Mapping[str, Any], ...]:
-    raw_cases = attack_config.get("cases", ())
-    return case_configs_from_value(raw_cases, "attack.hijackrag.cases")
-
-
-def _case_file_configs_hijack(
-    attack_config: Mapping[str, Any],
-    *,
-    base_dir: Path | None,
-) -> tuple[Mapping[str, Any], ...]:
-    file_paths = [
-        *path_strings_from_value(
-            attack_config.get("case_files", ()),
-            "attack.hijackrag.case_files",
-        ),
-        *path_strings_from_value(
-            attack_config.get("cases_file", ()),
-            "attack.hijackrag.cases_file",
-        ),
-    ]
-    cases: list[Mapping[str, Any]] = []
-    for file_path in file_paths:
-        cases.extend(load_case_configs(file_path, base_dir=base_dir))
-    return tuple(cases)
-
-
-def build_hijackrag_scan_config(config: Mapping[str, Any]) -> HijackRAGScanConfig:
-    scan_config = config.get("scan", {})
-    if not isinstance(scan_config, Mapping):
-        raise ScanConfigError("scan must be a mapping")
-    scan_config_accessor = ConfigAccessor(
-        scan_config,
-        prefix="scan",
-        error_type=ScanConfigError,
-    )
-    return HijackRAGScanConfig(
-        repetitions=scan_config_accessor.get_optional_int("repetitions", 1),
-        attack_success_rate_threshold=scan_config_accessor.get_optional_float(
-            "attack_success_rate_threshold", 0.0
-        ),
-        override_contexts=scan_config_accessor.get_bool("override_contexts", False),
-        cleanup=cleanup_option(scan_config),
-    )
-
-
 def _build_scan_command(
     config: Mapping[str, Any],
     base_dir: Path | None = None,
@@ -286,7 +216,7 @@ def _build_scan_command(
             corpus_poisoner=build_corpus_poisoner(config, registries=registries),
         ),
         requests=build_hijackrag_requests(config, base_dir=base_dir),
-        scan_config=build_hijackrag_scan_config(config),
+        scan_config=build_corpus_poison_scan_config(config),
     )
 
 
@@ -294,7 +224,11 @@ def _build_automatic_case_generator(
     config: Mapping[str, Any],
 ) -> AutomaticHijackRAGCaseGenerator:
     attack_conf = attack_section(config, "hijackrag")
-    llm_client = build_hijackrag_llm_client(config, attack_config=attack_conf)
+    llm_client = build_attack_llm_client(
+        config,
+        attack_id="hijackrag",
+        attack_config=attack_conf,
+    )
     return AutomaticHijackRAGCaseGenerator(llm_client=llm_client)
 
 
