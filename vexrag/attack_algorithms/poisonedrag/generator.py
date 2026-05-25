@@ -12,14 +12,13 @@ from vexrag.attack_algorithms.poisonedrag.schema import (
     PoisonedRAGRequest,
     PoisonedRAGResult,
 )
-from vexrag.attack_algorithms.poisonedrag.validators import (
+from vexrag.attack_algorithms.poisonedrag.validation import (
     PoisonedRAGValidationError,
     normalize_adv_texts,
-    validate_correct_answer_payload,
     validate_poison_payload,
 )
 from vexrag.core.attack_configurator import CorrectAnswerProvider
-from vexrag.core.llm import JsonCompletionClient
+from vexrag.core.llm import JsonCompletionClient, validate_correct_answer_payload
 
 
 class PoisonedRAGGenerator:

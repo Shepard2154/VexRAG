@@ -2,39 +2,34 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from vexrag.attack_algorithms.poison_base.case_id import stable_generated_case_id
+from vexrag.attack_algorithms.poison_base.plugin_factory import (
+    CorpusPoisonAttackSpec,
+    build_attack_method_configurator,
+)
 from vexrag.attack_algorithms.poison_base.plugin_helpers import (
     build_attack_llm_client,
     load_attack_case_configs,
 )
-from vexrag.attack_algorithms.poison_base.scan_config import (
-    build_corpus_poison_scan_config,
-)
 from vexrag.attack_algorithms.poisonedrag.case_generator import (
     AutomaticPoisonedRAGCaseGenerator,
 )
-from vexrag.attack_algorithms.poisonedrag.evaluation import (
-    PoisonedRAGJudgePromptBuilder,
-)
 from vexrag.attack_algorithms.poisonedrag.generator import PoisonedRAGGenerator
-from vexrag.attack_algorithms.poisonedrag.scan import PoisonedRAGScanRunner
-from vexrag.attack_algorithms.poisonedrag.schema import PoisonedRAGRequest
-from vexrag.attack_algorithms.registries import create_scan_registries
-from vexrag.core.attack_configurator.types import (
-    AttackMethodConfigurator,
-    GenerateCasesParams,
+from vexrag.attack_algorithms.poisonedrag.prompts import PoisonedRAGJudgePromptBuilder
+from vexrag.attack_algorithms.poisonedrag.scan_profile import (
+    POISONEDRAG_ATTACK_ID,
+    POISONEDRAG_SCAN_PROFILE,
 )
+from vexrag.attack_algorithms.poisonedrag.schema import PoisonedRAGRequest
+from vexrag.core.attack_configurator.types import GenerateCasesParams
 from vexrag.core.base_configuration import ConfigAccessor
 from vexrag.core.scan.builder import (
     attack_section,
-    build_corpus_poisoner,
-    build_evaluator,
-    build_target_system,
     poisoning_style_option,
     target_style_option,
 )
 from vexrag.core.scan.builder.registries import ScanRegistries
 from vexrag.core.scan.config.errors import ScanConfigError
-from vexrag.core.scan.execution import ConfiguredScanCommand
 from vexrag.core.target_systems import (
     HTTPTargetSystemAdapter,
     TargetCorrectAnswerProvider,
@@ -43,14 +38,15 @@ from vexrag.core.target_systems import (
 
 def build_poisonedrag_generator(
     config: Mapping[str, Any],
-    *,
     target_system: HTTPTargetSystemAdapter,
-    registries: ScanRegistries | None = None,
+    base_dir: Path | None,
+    registries: ScanRegistries | None,
 ) -> PoisonedRAGGenerator:
-    attack_conf = attack_section(config, "poisonedrag")
+    del base_dir
+    attack_conf = attack_section(config, POISONEDRAG_ATTACK_ID)
     llm_client = build_attack_llm_client(
         config,
-        attack_id="poisonedrag",
+        attack_id=POISONEDRAG_ATTACK_ID,
         attack_config=attack_conf,
         registries=registries,
     )
@@ -58,7 +54,7 @@ def build_poisonedrag_generator(
     if str(attack_conf.get("correct_answer_provider", "")).strip() == "target_system":
         correct_answer_provider = TargetCorrectAnswerProvider(
             target_system=target_system,
-            attack="poisonedrag",
+            attack=POISONEDRAG_ATTACK_ID,
         )
     return PoisonedRAGGenerator(
         llm_client=llm_client,
@@ -68,18 +64,18 @@ def build_poisonedrag_generator(
 
 def build_poisonedrag_requests(
     config: Mapping[str, Any],
-    *,
     base_dir: Path | None = None,
 ) -> tuple[PoisonedRAGRequest, ...]:
-    attack_conf = attack_section(config, "poisonedrag")
+    attack_conf = attack_section(config, POISONEDRAG_ATTACK_ID)
     case_configs = load_attack_case_configs(
         attack_conf,
-        attack_id="poisonedrag",
+        attack_id=POISONEDRAG_ATTACK_ID,
         base_dir=base_dir,
     )
     if not case_configs:
         raise ScanConfigError(
-            "attack.poisonedrag.cases or attack.poisonedrag.case_files "
+            f"attack.{POISONEDRAG_ATTACK_ID}.cases or "
+            f"attack.{POISONEDRAG_ATTACK_ID}.case_files "
             "must contain at least one case"
         )
     return tuple(
@@ -98,7 +94,7 @@ def _build_poisonedrag_request(
     *,
     case_number: int,
 ) -> PoisonedRAGRequest:
-    prefix = f"attack.poisonedrag.cases[{case_number}]"
+    prefix = f"attack.{POISONEDRAG_ATTACK_ID}.cases[{case_number}]"
     case_config_accessor = ConfigAccessor(
         case_config,
         prefix=prefix,
@@ -106,7 +102,7 @@ def _build_poisonedrag_request(
     )
     attack_config_accessor = ConfigAccessor(
         attack_config,
-        prefix="attack.poisonedrag",
+        prefix=f"attack.{POISONEDRAG_ATTACK_ID}",
         error_type=ScanConfigError,
     )
     return PoisonedRAGRequest(
@@ -135,44 +131,13 @@ def _build_poisonedrag_request(
     )
 
 
-def _build_scan_command(
-    config: Mapping[str, Any],
-    base_dir: Path | None = None,
-) -> ConfiguredScanCommand:
-    registries = create_scan_registries(base_dir=base_dir)
-    target_system = build_target_system(
-        config,
-        registry=registries.target_systems,
-    )
-    generator = build_poisonedrag_generator(
-        config,
-        target_system=target_system,
-        registries=registries,
-    )
-    evaluator = build_evaluator(
-        config,
-        attack_id="poisonedrag",
-        registries=registries,
-    )
-    return ConfiguredScanCommand(
-        runner=PoisonedRAGScanRunner(
-            generator=generator,
-            target_system=target_system,
-            evaluator=evaluator,
-            corpus_poisoner=build_corpus_poisoner(config, registries=registries),
-        ),
-        requests=build_poisonedrag_requests(config, base_dir=base_dir),
-        scan_config=build_corpus_poison_scan_config(config),
-    )
-
-
 def _build_automatic_case_generator(
     config: Mapping[str, Any],
 ) -> AutomaticPoisonedRAGCaseGenerator:
-    attack_conf = attack_section(config, "poisonedrag")
+    attack_conf = attack_section(config, POISONEDRAG_ATTACK_ID)
     llm_client = build_attack_llm_client(
         config,
-        attack_id="poisonedrag",
+        attack_id=POISONEDRAG_ATTACK_ID,
         attack_config=attack_conf,
     )
     return AutomaticPoisonedRAGCaseGenerator(llm_client=llm_client)
@@ -188,7 +153,7 @@ def _serialize_case_for_yaml(case: Any) -> Mapping[str, str]:
     if not query or not correct_answer or not target_incorrect_answer:
         raise ScanConfigError("generated case is missing required fields")
     if not case_id:
-        case_id = f"generated_case_{abs(hash(query)) % 1_000_000}"
+        case_id = stable_generated_case_id(query)
     return {
         "id": case_id,
         "query": query,
@@ -212,12 +177,16 @@ def _generate_cases(
     )
 
 
-POISON_PLUGIN = AttackMethodConfigurator(
-    attack_id="poisonedrag",
+POISONEDRAG_SPEC = CorpusPoisonAttackSpec(
+    attack_id=POISONEDRAG_ATTACK_ID,
     display_name="PoisonedRAG",
-    build_scan_command=_build_scan_command,
-    judge_prompt_builder_factory=lambda: PoisonedRAGJudgePromptBuilder(),
+    scan_profile=POISONEDRAG_SCAN_PROFILE,
+    build_generator=build_poisonedrag_generator,
+    build_requests=build_poisonedrag_requests,
     build_automatic_case_generator=_build_automatic_case_generator,
     serialize_case_for_yaml=_serialize_case_for_yaml,
     generate_cases=_generate_cases,
+    judge_prompt_builder_factory=lambda: PoisonedRAGJudgePromptBuilder(),
 )
+
+POISONEDRAG_PLUGIN = build_attack_method_configurator(POISONEDRAG_SPEC)
