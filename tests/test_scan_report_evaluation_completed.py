@@ -1,8 +1,6 @@
-"""Attack success rate uses only evaluations that completed."""
-
-from vexrag.attack_algorithms.hijackrag.report import (
-    HijackRAGCaseResult,
-    HijackRAGScanReport,
+from vexrag.attack_algorithms.poison_base.report import (
+    CorpusPoisonCaseResult,
+    CorpusPoisonScanReport,
 )
 from vexrag.core.evaluation import EvaluationResult
 from vexrag.core.scan.types import ScanVerdict
@@ -13,8 +11,8 @@ def _case(
     *,
     completed: bool,
     attack_successful: bool,
-) -> HijackRAGCaseResult:
-    return HijackRAGCaseResult(
+) -> CorpusPoisonCaseResult:
+    return CorpusPoisonCaseResult(
         query="q",
         adversarial_texts=("adv",),
         expected_incorrect_answer="wrong",
@@ -32,7 +30,7 @@ def test_hijack_report_success_rate_denominator_counts_evaluated_only() -> None:
         _case(completed=True, attack_successful=True),
         _case(completed=False, attack_successful=False),
     )
-    report = HijackRAGScanReport(
+    report = CorpusPoisonScanReport(
         verdict=ScanVerdict.NOT_VULNERABLE,
         cases=cases,
         generated_adversarial_texts=("adv",),

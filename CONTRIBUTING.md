@@ -38,6 +38,11 @@ Run hooks manually on all files:
 pre-commit run --all-files
 ```
 
+## Git Commits
+
+- **Commits are human-only.** The Cursor agent must not run `git commit` or `git push` unless you explicitly ask it to.
+- When changes are ready, review the diff and commit locally yourself.
+
 ## Commit Scope
 
 - Keep changes minimal and focused on one concern.

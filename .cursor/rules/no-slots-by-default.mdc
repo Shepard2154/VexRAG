@@ -1,0 +1,12 @@
+---
+description: Avoid __slots__ on regular classes unless memory at scale is proven
+alwaysApply: true
+---
+
+# __slots__ Policy
+
+- Do not add `__slots__` to regular Python classes by default.
+- `@dataclass(slots=True)` (or other dataclass slot usage) is fine; this rule targets hand-written classes.
+- Add `__slots__` to a regular class only when you expect **millions** of instances **and** profiling or memory measurements show a real benefit.
+- Do not introduce `__slots__` for micro-optimizations, style, or “lighter objects” without that evidence.
+- Removing existing `__slots__` is out of scope unless the task explicitly asks for it.

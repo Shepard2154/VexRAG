@@ -13,12 +13,9 @@ from vexrag.attack_algorithms.hijackrag.segments import (
     apply_hijack_insert,
     load_hijack_segments,
 )
+from vexrag.attack_algorithms.poison_base.correct_answer import resolve_correct_answer
 from vexrag.core.attack_configurator import CorrectAnswerProvider
-from vexrag.core.llm import (
-    JsonCompletionClient,
-    build_correct_answer_prompt,
-    validate_correct_answer_payload,
-)
+from vexrag.core.llm import JsonCompletionClient, validate_correct_answer_payload
 
 PROMPT_VERSION = "hijackrag-segments-v1"
 
@@ -92,29 +89,16 @@ class HijackRAGGenerator:
         request: HijackRAGRequest,
         warnings: list[str],
     ) -> tuple[str, str]:
-        if request.correct_answer and request.correct_answer.strip():
-            return request.correct_answer.strip(), "provided"
-
-        if self.correct_answer_provider is not None:
-            candidate = self.correct_answer_provider.get_correct_answer(
-                request.query,
-                target_style=request.correct_answer_style,
-                seed=request.seed,
-            )
-            text = candidate.strip()
-            if text:
-                return text, "target_system"
-            warnings.append(
-                "Target system returned empty correct answer; using LLM fallback."
-            )
-
-        payload = self.llm_client.complete_json(
-            build_correct_answer_prompt(
-                query=request.query,
-                target_style=request.correct_answer_style,
-            ),
+        return resolve_correct_answer(
+            query=request.query,
+            provided_answer=request.correct_answer,
+            target_style=request.correct_answer_style,
+            seed=request.seed,
+            correct_answer_provider=self.correct_answer_provider,
+            llm_client=self.llm_client,
+            validate_payload=validate_correct_answer_payload,
+            warnings=warnings,
         )
-        return validate_correct_answer_payload(payload), "llm_generated"
 
     @staticmethod
     def _clean_unique_segment_ids(raw_ids: Iterable[str]) -> list[str]:

@@ -25,14 +25,6 @@ class PoisonedRAGRequest:
 
 
 @dataclass(slots=True)
-class PoisonedRAGSample:
-    """Single generated adversarial candidate."""
-
-    text: str
-    source_corpus: str | None = None
-
-
-@dataclass(slots=True)
 class PoisonedRAGMeta:
     """Generation metadata for diagnostics and observability."""
 

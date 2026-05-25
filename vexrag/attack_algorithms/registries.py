@@ -17,12 +17,12 @@ from vexrag.core.scan.builder.registries import (
 
 
 def create_attack_method_registry() -> AttackMethodRegistry:
-    from vexrag.attack_algorithms.hijackrag.plugin import HIJACK_PLUGIN
-    from vexrag.attack_algorithms.poisonedrag.plugin import POISON_PLUGIN
+    from vexrag.attack_algorithms.hijackrag.plugin import HIJACKRAG_PLUGIN
+    from vexrag.attack_algorithms.poisonedrag.plugin import POISONEDRAG_PLUGIN
 
     builder = AttackMethodRegistryBuilder()
-    builder.register(HIJACK_PLUGIN)
-    builder.register(POISON_PLUGIN)
+    builder.register(HIJACKRAG_PLUGIN)
+    builder.register(POISONEDRAG_PLUGIN)
     return builder.build()
 
 

@@ -10,16 +10,8 @@ class PoisonedRAGValidationError(LLMPayloadValidationError):
     """Raised when an LLM payload does not match expected schema."""
 
 
-def validate_correct_answer_payload(payload: Any) -> str:
-    """Extract stage-1 correct answer from payload."""
-    try:
-        return json_validation.validate_correct_answer_payload(payload)
-    except LLMPayloadValidationError as exc:
-        raise PoisonedRAGValidationError(str(exc)) from exc
-
-
 def validate_poison_payload(payload: Any) -> tuple[str, list[str]]:
-    """Extract stage-2 incorrect answer and adversarial texts from payload."""
+    """Validate poison-candidates LLM payload and return incorrect_answer and adv_texts."""
     try:
         data = json_validation.coerce_payload_to_dict(payload)
     except LLMPayloadValidationError as exc:
@@ -57,7 +49,21 @@ def validate_poison_payload(payload: Any) -> tuple[str, list[str]]:
     return incorrect_answer.strip(), cleaned_adv
 
 
+def normalize_adv_texts(
+    adv_texts: list[str], limit: int, seed: int | None = None
+) -> list[str]:
+    """Deduplicate and truncate adversarial texts with deterministic ordering by seed."""
+    deduped = list(dict.fromkeys(adv_texts))
+
+    if seed is not None:
+        rng = random.Random(seed)
+        rng.shuffle(deduped)
+
+    return deduped[:limit]
+
+
 def _collect_corpus_fields(data: dict[str, Any]) -> list[str] | None:
+    """Collect non-empty corpus1..corpusN strings from payload, sorted by index."""
     pairs: list[tuple[int, str]] = []
     for key, value in data.items():
         match = re.fullmatch(r"corpus(\d+)", str(key))
@@ -78,16 +84,3 @@ def _first_present_string(
         if key in data:
             return data[key]
     return None
-
-
-def normalize_adv_texts(
-    adv_texts: list[str], limit: int, seed: int | None = None
-) -> list[str]:
-    """Deduplicate and truncate adversarial texts with deterministic ordering by seed."""
-    deduped = list(dict.fromkeys(adv_texts))
-
-    if seed is not None:
-        rng = random.Random(seed)
-        rng.shuffle(deduped)
-
-    return deduped[:limit]

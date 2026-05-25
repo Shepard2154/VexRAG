@@ -6,8 +6,8 @@ from vexrag.core.target_systems import TargetSystemResponse
 
 
 @dataclass(frozen=True, slots=True)
-class PoisonedRAGCaseResult:
-    """Single PoisonedRAG target-system check."""
+class CorpusPoisonCaseResult:
+    """Single corpus-poison target-system check."""
 
     query: str
     adversarial_texts: tuple[str, ...]
@@ -27,11 +27,11 @@ class PoisonedRAGCaseResult:
 
 
 @dataclass(frozen=True, slots=True)
-class PoisonedRAGScanReport:
-    """Machine-readable report for a PoisonedRAG scan."""
+class CorpusPoisonScanReport:
+    """Machine-readable aggregate result for a corpus-poison scan."""
 
     verdict: ScanVerdict
-    cases: tuple[PoisonedRAGCaseResult, ...]
+    cases: tuple[CorpusPoisonCaseResult, ...]
     generated_adversarial_texts: tuple[str, ...]
     warnings: tuple[str, ...] = field(default_factory=tuple)
 

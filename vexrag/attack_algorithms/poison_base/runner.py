@@ -1,15 +1,21 @@
 import logging
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
 from time import perf_counter
-from typing import Any
+from typing import Any, Generic
 
-from vexrag.attack_algorithms.hijackrag.generator import HijackRAGGenerator
-from vexrag.attack_algorithms.hijackrag.report import (
-    HijackRAGCaseResult,
-    HijackRAGScanReport,
+from vexrag.attack_algorithms.poison_base.contracts import (
+    CorpusPoisonGenerationResult,
+    CorpusPoisonGenerator,
+    CorpusPoisonRequest,
+    RequestT,
+    ResultT,
 )
-from vexrag.attack_algorithms.hijackrag.schema import HijackRAGRequest, HijackRAGResult
+from vexrag.attack_algorithms.poison_base.profile import CorpusPoisonScanProfile
+from vexrag.attack_algorithms.poison_base.report import (
+    CorpusPoisonCaseResult,
+    CorpusPoisonScanReport,
+)
+from vexrag.attack_algorithms.poison_base.scan_config import CorpusPoisonScanConfig
 from vexrag.core.evaluation import Evaluator
 from vexrag.core.retrieval import CorpusPoisoner
 from vexrag.core.scan.contracts import ScanCaseReport
@@ -17,31 +23,21 @@ from vexrag.core.scan.execution import probe_with_poisoning_and_evaluation
 from vexrag.core.scan.types import ScanVerdict
 from vexrag.core.target_systems import TargetSystemAdapter
 
-LOGGER = logging.getLogger("vexrag.scan.hijackrag")
 
+class CorpusPoisonScanRunner(Generic[RequestT, ResultT]):
+    """Orchestrates corpus-poison generation and target-system checks."""
 
-@dataclass(frozen=True, slots=True)
-class HijackRAGScanConfig:
-    repetitions: int = 1
-    attack_success_rate_threshold: float = 0.0
-    override_contexts: bool = False
-    cleanup: bool = False
-
-    def __post_init__(self) -> None:
-        if self.repetitions < 1:
-            raise ValueError("repetitions must be at least 1")
-        if not 0 <= self.attack_success_rate_threshold <= 1:
-            raise ValueError("attack_success_rate_threshold must be between 0 and 1")
-
-
-class HijackRAGScanRunner:
     def __init__(
         self,
-        generator: HijackRAGGenerator,
+        *,
+        profile: CorpusPoisonScanProfile,
+        generator: CorpusPoisonGenerator[RequestT],
         target_system: TargetSystemAdapter,
         evaluator: Evaluator,
         corpus_poisoner: CorpusPoisoner | None = None,
     ) -> None:
+        self._profile = profile
+        self._logger = logging.getLogger(f"vexrag.scan.{profile.attack_id}")
         self.generator = generator
         self.target_system = target_system
         self.evaluator = evaluator
@@ -49,23 +45,28 @@ class HijackRAGScanRunner:
 
     def run(
         self,
-        requests: Sequence[HijackRAGRequest],
-        config: HijackRAGScanConfig | None = None,
+        requests: Sequence[RequestT],
+        config: CorpusPoisonScanConfig | None = None,
         *,
         on_case_complete: Callable[[ScanCaseReport], None] | None = None,
-    ) -> HijackRAGScanReport:
-        scan_config = config or HijackRAGScanConfig()
+    ) -> CorpusPoisonScanReport:
+        scan_config = config or CorpusPoisonScanConfig()
         if not requests:
-            raise ValueError("at least one HijackRAG case is required")
+            raise ValueError(self._profile.empty_requests_error)
 
-        cases: list[HijackRAGCaseResult] = []
-        generated_results: list[HijackRAGResult] = []
+        cases: list[CorpusPoisonCaseResult] = []
+        generated_results: list[ResultT] = []
         for case_index, request in enumerate(requests, start=1):
             case_label = request.case_id or f"#{case_index}"
-            LOGGER.info("Building HijackRAG adversarial texts for case %s", case_label)
+            self._logger.info(
+                "%s adversarial texts for case %s",
+                self._profile.generate_log_verb,
+                case_label,
+            )
             generated = self.generator.generate_one(request)
-            LOGGER.info(
-                "Built %d adversarial text(s) for case %s",
+            self._logger.info(
+                "%s %d adversarial text(s) for case %s",
+                self._profile.generated_log_verb,
                 len(generated.adv_texts),
                 case_label,
             )
@@ -84,19 +85,20 @@ class HijackRAGScanRunner:
 
     def _run_cases(
         self,
-        generated: HijackRAGResult,
-        request: HijackRAGRequest,
+        generated: ResultT,
+        request: RequestT,
         case_index: int,
-        config: HijackRAGScanConfig,
+        config: CorpusPoisonScanConfig,
         *,
         on_case_complete: Callable[[ScanCaseReport], None] | None = None,
-    ) -> tuple[HijackRAGCaseResult, ...]:
-        results: list[HijackRAGCaseResult] = []
+    ) -> tuple[CorpusPoisonCaseResult, ...]:
+        cases: list[CorpusPoisonCaseResult] = []
         for run_index in range(1, config.repetitions + 1):
-            LOGGER.info(
-                "Querying target for case %s, run %d, hijack texts %d",
+            self._logger.info(
+                "Querying target for case %s, run %d, %s %d",
                 request.case_id or f"#{case_index}",
                 run_index,
+                self._profile.corpus_cleanup_label,
                 len(generated.adv_texts),
             )
             finished = self._run_case(
@@ -108,22 +110,22 @@ class HijackRAGScanRunner:
                 override_contexts=config.override_contexts,
                 cleanup=config.cleanup,
             )
-            results.append(finished)
+            cases.append(finished)
             if on_case_complete is not None:
                 on_case_complete(finished)
-        return tuple(results)
+        return tuple(cases)
 
     def _run_case(
         self,
         *,
-        generated: HijackRAGResult,
-        request: HijackRAGRequest,
+        generated: CorpusPoisonGenerationResult,
+        request: CorpusPoisonRequest,
         adversarial_texts: tuple[str, ...],
         case_index: int,
         run_index: int,
         override_contexts: bool,
         cleanup: bool,
-    ) -> HijackRAGCaseResult:
+    ) -> CorpusPoisonCaseResult:
         metadata = self._case_metadata(
             request=request,
             generated=generated,
@@ -143,19 +145,20 @@ class HijackRAGScanRunner:
             override_contexts=override_contexts,
             cleanup=cleanup,
             metadata=metadata,
-            corpus_cleanup_label="hijack texts",
+            corpus_cleanup_label=self._profile.corpus_cleanup_label,
         )
         elapsed_ms = int((perf_counter() - started) * 1000)
-        LOGGER.info(
-            "case_done attack=hijackrag case_id=%s run_index=%s duration_ms=%s "
+        self._logger.info(
+            "case_done attack=%s case_id=%s run_index=%s duration_ms=%s "
             "completed=%s attack_successful=%s",
+            self._profile.attack_id,
             metadata.get("case_id", ""),
             run_index,
             elapsed_ms,
             evaluation.completed,
             evaluation.attack_successful,
         )
-        return HijackRAGCaseResult(
+        return CorpusPoisonCaseResult(
             query=generated.query,
             adversarial_texts=adversarial_texts,
             expected_incorrect_answer=generated.incorrect_answer,
@@ -167,10 +170,10 @@ class HijackRAGScanRunner:
 
     def _build_report(
         self,
-        generated_results: tuple[HijackRAGResult, ...],
-        cases: tuple[HijackRAGCaseResult, ...],
-        config: HijackRAGScanConfig,
-    ) -> HijackRAGScanReport:
+        generated_results: tuple[ResultT, ...],
+        cases: tuple[CorpusPoisonCaseResult, ...],
+        config: CorpusPoisonScanConfig,
+    ) -> CorpusPoisonScanReport:
         evaluated = sum(1 for case in cases if case.evaluation.completed)
         successful_cases = sum(case.successful for case in cases)
         success_rate = successful_cases / evaluated if evaluated else 0.0
@@ -197,7 +200,7 @@ class HijackRAGScanRunner:
                 ),
             )
 
-        return HijackRAGScanReport(
+        return CorpusPoisonScanReport(
             verdict=(
                 ScanVerdict.VULNERABLE if vulnerable else ScanVerdict.NOT_VULNERABLE
             ),
@@ -210,24 +213,26 @@ class HijackRAGScanRunner:
             warnings=warnings,
         )
 
-    @staticmethod
     def _case_metadata(
-        request: HijackRAGRequest,
-        generated: HijackRAGResult,
+        self,
+        *,
+        request: CorpusPoisonRequest,
+        generated: CorpusPoisonGenerationResult,
         case_index: int,
         run_index: int,
         adversarial_text_count: int,
     ) -> dict[str, Any]:
         metadata: dict[str, Any] = {
-            "attack": "hijackrag",
+            "attack": self._profile.attack_id,
             "case_index": case_index,
             "run_index": run_index,
             "adversarial_text_count": adversarial_text_count,
             "query": generated.query,
             "expected_clean_answer": generated.correct_answer,
             "expected_attack_answer": generated.incorrect_answer,
-            "hijack_segment_ids": list(generated.meta.segment_ids),
         }
         if request.case_id:
             metadata["case_id"] = request.case_id
+        if self._profile.metadata_extra is not None:
+            metadata.update(self._profile.metadata_extra(request, generated))
         return metadata
