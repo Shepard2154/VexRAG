@@ -13,9 +13,9 @@ class HijackRAGRequest:
 
     query: str
     hijack_insert: str
+    correct_answer: str
     adv_per_query: int = 1
     case_id: str | None = None
-    correct_answer: str | None = None
     segment_ids: tuple[str, ...] = ()
     correct_answer_style: TargetStyle = "short_fact"
     seed: int | None = None

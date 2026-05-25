@@ -1,17 +1,9 @@
 from vexrag.attack_algorithms.hijackrag.case_generator import (
     AutomaticHijackRAGCaseGenerator,
 )
-from vexrag.attack_algorithms.hijackrag.evaluation import HijackRAGJudgePromptBuilder
 from vexrag.attack_algorithms.hijackrag.generator import HijackRAGGenerator
-from vexrag.attack_algorithms.hijackrag.plugin import HIJACK_PLUGIN
-from vexrag.attack_algorithms.hijackrag.report import (
-    HijackRAGCaseResult,
-    HijackRAGScanReport,
-)
-from vexrag.attack_algorithms.hijackrag.scan import (
-    HijackRAGScanConfig,
-    HijackRAGScanRunner,
-)
+from vexrag.attack_algorithms.hijackrag.plugin import HIJACKRAG_PLUGIN
+from vexrag.attack_algorithms.hijackrag.prompts import HijackRAGJudgePromptBuilder
 from vexrag.attack_algorithms.hijackrag.schema import (
     HijackRAGMeta,
     HijackRAGRequest,
@@ -23,26 +15,17 @@ from vexrag.attack_algorithms.hijackrag.segments import (
     default_hijack_segments_path,
     load_hijack_segments,
 )
+from vexrag.attack_algorithms.hijackrag.validation import AutomaticCaseGenerationError
 
 __all__ = [
-    "HIJACK_PLUGIN",
-    # Evaluation
-    "HijackRAGJudgePromptBuilder",
-    # Case generation
+    "HIJACKRAG_PLUGIN",
+    "AutomaticCaseGenerationError",
     "AutomaticHijackRAGCaseGenerator",
-    # Generator
     "HijackRAGGenerator",
-    # Scan
-    "HijackRAGScanConfig",
-    "HijackRAGScanRunner",
-    # Report
-    "HijackRAGCaseResult",
-    "HijackRAGScanReport",
-    # Schema
+    "HijackRAGJudgePromptBuilder",
     "HijackRAGMeta",
     "HijackRAGRequest",
     "HijackRAGResult",
-    # Segments
     "HijackSegmentRecord",
     "apply_hijack_insert",
     "default_hijack_segments_path",

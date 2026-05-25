@@ -5,34 +5,31 @@ from typing import Any
 from vexrag.attack_algorithms.hijackrag.case_generator import (
     AutomaticHijackRAGCaseGenerator,
 )
-from vexrag.attack_algorithms.hijackrag.evaluation import HijackRAGJudgePromptBuilder
 from vexrag.attack_algorithms.hijackrag.generator import HijackRAGGenerator
-from vexrag.attack_algorithms.hijackrag.scan import HijackRAGScanRunner
+from vexrag.attack_algorithms.hijackrag.prompts import HijackRAGJudgePromptBuilder
+from vexrag.attack_algorithms.hijackrag.scan_profile import (
+    HIJACKRAG_ATTACK_ID,
+    HIJACKRAG_SCAN_PROFILE,
+)
 from vexrag.attack_algorithms.hijackrag.schema import HijackRAGRequest
 from vexrag.attack_algorithms.hijackrag.segments import default_hijack_segments_path
+from vexrag.attack_algorithms.poison_base.case_id import stable_generated_case_id
+from vexrag.attack_algorithms.poison_base.plugin_factory import (
+    CorpusPoisonAttackSpec,
+    build_attack_method_configurator,
+)
 from vexrag.attack_algorithms.poison_base.plugin_helpers import (
     build_attack_llm_client,
     load_attack_case_configs,
 )
-from vexrag.attack_algorithms.poison_base.scan_config import (
-    build_corpus_poison_scan_config,
-)
-from vexrag.attack_algorithms.registries import create_scan_registries
-from vexrag.core.attack_configurator.types import (
-    AttackMethodConfigurator,
-    GenerateCasesParams,
-)
+from vexrag.core.attack_configurator.types import GenerateCasesParams
 from vexrag.core.base_configuration import ConfigAccessor
 from vexrag.core.scan.builder import (
     attack_section,
-    build_corpus_poisoner,
-    build_evaluator,
-    build_target_system,
     correct_answer_style_option,
 )
 from vexrag.core.scan.builder.registries import ScanRegistries
 from vexrag.core.scan.config.errors import ScanConfigError
-from vexrag.core.scan.execution import ConfiguredScanCommand
 from vexrag.core.target_systems import (
     HTTPTargetSystemAdapter,
     TargetCorrectAnswerProvider,
@@ -49,27 +46,28 @@ def _hijack_segments_path(
         return default_hijack_segments_path()
     if not isinstance(raw, str) or not raw.strip():
         raise ScanConfigError(
-            "attack.hijackrag.segments_file must be a non-empty string when set"
+            f"attack.{HIJACKRAG_ATTACK_ID}.segments_file must be a non-empty string when set"
         )
     path = Path(raw.strip())
     if not path.is_absolute() and base_dir is not None:
         path = base_dir / path
     if not path.is_file():
-        raise ScanConfigError(f"attack.hijackrag.segments_file not found: {path}")
+        raise ScanConfigError(
+            f"attack.{HIJACKRAG_ATTACK_ID}.segments_file not found: {path}"
+        )
     return path
 
 
 def build_hijackrag_generator(
     config: Mapping[str, Any],
-    *,
     target_system: HTTPTargetSystemAdapter,
-    base_dir: Path | None = None,
-    registries: ScanRegistries | None = None,
+    base_dir: Path | None,
+    registries: ScanRegistries | None,
 ) -> HijackRAGGenerator:
-    attack_conf = attack_section(config, "hijackrag")
+    attack_conf = attack_section(config, HIJACKRAG_ATTACK_ID)
     llm_client = build_attack_llm_client(
         config,
-        attack_id="hijackrag",
+        attack_id=HIJACKRAG_ATTACK_ID,
         attack_config=attack_conf,
         registries=registries,
     )
@@ -78,11 +76,7 @@ def build_hijackrag_generator(
     if str(attack_conf.get("correct_answer_provider", "")).strip() == "target_system":
         correct_answer_provider = TargetCorrectAnswerProvider(
             target_system=target_system,
-            attack="hijackrag",
-        )
-    if not segments_path.is_file():
-        raise ScanConfigError(
-            f"attack.hijackrag segments file not found: {segments_path}"
+            attack=HIJACKRAG_ATTACK_ID,
         )
     return HijackRAGGenerator.from_segments_file(
         segments_path,
@@ -93,18 +87,18 @@ def build_hijackrag_generator(
 
 def build_hijackrag_requests(
     config: Mapping[str, Any],
-    *,
     base_dir: Path | None = None,
 ) -> tuple[HijackRAGRequest, ...]:
-    attack_conf = attack_section(config, "hijackrag")
+    attack_conf = attack_section(config, HIJACKRAG_ATTACK_ID)
     case_configs = load_attack_case_configs(
         attack_conf,
-        attack_id="hijackrag",
+        attack_id=HIJACKRAG_ATTACK_ID,
         base_dir=base_dir,
     )
     if not case_configs:
         raise ScanConfigError(
-            "attack.hijackrag.cases or attack.hijackrag.case_files "
+            f"attack.{HIJACKRAG_ATTACK_ID}.cases or "
+            f"attack.{HIJACKRAG_ATTACK_ID}.case_files "
             "must contain at least one case"
         )
     return tuple(
@@ -151,7 +145,7 @@ def _build_hijackrag_request(
     *,
     case_number: int,
 ) -> HijackRAGRequest:
-    prefix = f"attack.hijackrag.cases[{case_number}]"
+    prefix = f"attack.{HIJACKRAG_ATTACK_ID}.cases[{case_number}]"
     insert_raw = case_config.get("hijack_insert", case_config.get("insert_prompt"))
     if not isinstance(insert_raw, str) or not insert_raw.strip():
         raise ScanConfigError(f"{prefix}.hijack_insert is required")
@@ -162,7 +156,7 @@ def _build_hijackrag_request(
     )
     attack_config_accessor = ConfigAccessor(
         attack_config,
-        prefix="attack.hijackrag",
+        prefix=f"attack.{HIJACKRAG_ATTACK_ID}",
         error_type=ScanConfigError,
     )
     return HijackRAGRequest(
@@ -178,7 +172,7 @@ def _build_hijackrag_request(
             case_config,
             default=correct_answer_style_option(
                 attack_config,
-                prefix="attack.hijackrag",
+                prefix=f"attack.{HIJACKRAG_ATTACK_ID}",
             ),
             prefix=prefix,
         ),
@@ -188,45 +182,13 @@ def _build_hijackrag_request(
     )
 
 
-def _build_scan_command(
-    config: Mapping[str, Any],
-    base_dir: Path | None = None,
-) -> ConfiguredScanCommand:
-    registries = create_scan_registries(base_dir=base_dir)
-    target_system = build_target_system(
-        config,
-        registry=registries.target_systems,
-    )
-    generator = build_hijackrag_generator(
-        config,
-        target_system=target_system,
-        base_dir=base_dir,
-        registries=registries,
-    )
-    evaluator = build_evaluator(
-        config,
-        attack_id="hijackrag",
-        registries=registries,
-    )
-    return ConfiguredScanCommand(
-        runner=HijackRAGScanRunner(
-            generator=generator,
-            target_system=target_system,
-            evaluator=evaluator,
-            corpus_poisoner=build_corpus_poisoner(config, registries=registries),
-        ),
-        requests=build_hijackrag_requests(config, base_dir=base_dir),
-        scan_config=build_corpus_poison_scan_config(config),
-    )
-
-
 def _build_automatic_case_generator(
     config: Mapping[str, Any],
 ) -> AutomaticHijackRAGCaseGenerator:
-    attack_conf = attack_section(config, "hijackrag")
+    attack_conf = attack_section(config, HIJACKRAG_ATTACK_ID)
     llm_client = build_attack_llm_client(
         config,
-        attack_id="hijackrag",
+        attack_id=HIJACKRAG_ATTACK_ID,
         attack_config=attack_conf,
     )
     return AutomaticHijackRAGCaseGenerator(llm_client=llm_client)
@@ -241,7 +203,7 @@ def _serialize_case_for_yaml(case: Any) -> Mapping[str, Any]:
     if not query or not correct_answer or not hijack_insert:
         raise ScanConfigError("generated HijackRAG case is missing required fields")
     if not case_id:
-        case_id = f"generated_case_{abs(hash(query)) % 1_000_000}"
+        case_id = stable_generated_case_id(query)
     row: dict[str, Any] = {
         "id": case_id,
         "query": query,
@@ -271,12 +233,16 @@ def _generate_cases(
     )
 
 
-HIJACK_PLUGIN = AttackMethodConfigurator(
-    attack_id="hijackrag",
+HIJACKRAG_SPEC = CorpusPoisonAttackSpec(
+    attack_id=HIJACKRAG_ATTACK_ID,
     display_name="HijackRAG",
-    build_scan_command=_build_scan_command,
-    judge_prompt_builder_factory=lambda: HijackRAGJudgePromptBuilder(),
+    scan_profile=HIJACKRAG_SCAN_PROFILE,
+    build_generator=build_hijackrag_generator,
+    build_requests=build_hijackrag_requests,
     build_automatic_case_generator=_build_automatic_case_generator,
     serialize_case_for_yaml=_serialize_case_for_yaml,
     generate_cases=_generate_cases,
+    judge_prompt_builder_factory=lambda: HijackRAGJudgePromptBuilder(),
 )
+
+HIJACKRAG_PLUGIN = build_attack_method_configurator(HIJACKRAG_SPEC)
