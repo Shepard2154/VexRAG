@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Literal
 
+from vexrag.attack_algorithms.poisonedrag.scan_profile import POISONEDRAG_SCAN_PROFILE
 from vexrag.core.attack_configurator import (
     CorrectAnswerSource,
     PoisonedResult,
@@ -18,7 +19,7 @@ class PoisonedRAGRequest:
     correct_answer: str | None = None
     target_incorrect_answer: str | None = None
     case_id: str | None = None
-    adv_per_query: int = 3
+    adv_per_query: int = POISONEDRAG_SCAN_PROFILE.default_adv_per_query
     target_style: TargetStyle = "short_fact"
     poisoning_style: PoisoningStyle = "original"
     seed: int | None = None

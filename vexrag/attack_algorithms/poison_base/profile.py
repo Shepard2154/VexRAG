@@ -12,4 +12,5 @@ class CorpusPoisonScanProfile:
     generate_log_verb: str
     generated_log_verb: str
     empty_requests_error: str
+    default_adv_per_query: int
     metadata_extra: MetadataExtra | None = None

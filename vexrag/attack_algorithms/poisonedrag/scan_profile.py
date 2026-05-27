@@ -8,4 +8,5 @@ POISONEDRAG_SCAN_PROFILE = CorpusPoisonScanProfile(
     generate_log_verb="Generating",
     generated_log_verb="Generated",
     empty_requests_error="at least one PoisonedRAG case is required",
+    default_adv_per_query=5,
 )

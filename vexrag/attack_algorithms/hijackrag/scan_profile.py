@@ -15,5 +15,6 @@ HIJACKRAG_SCAN_PROFILE = CorpusPoisonScanProfile(
     generate_log_verb="Building HijackRAG",
     generated_log_verb="Built",
     empty_requests_error="at least one HijackRAG case is required",
+    default_adv_per_query=1,
     metadata_extra=_hijack_metadata_extra,
 )

@@ -102,4 +102,5 @@ def build_attack_method_configurator(
         build_automatic_case_generator=spec.build_automatic_case_generator,
         serialize_case_for_yaml=spec.serialize_case_for_yaml,
         generate_cases=spec.generate_cases,
+        default_adv_per_query=spec.scan_profile.default_adv_per_query,
     )
