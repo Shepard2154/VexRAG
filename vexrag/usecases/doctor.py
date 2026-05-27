@@ -3,7 +3,11 @@ from typing import Any
 
 from vexrag.core.scan.config.errors import ScanConfigError
 from vexrag.usecases.errors import UseCaseConfigError, UseCaseDependencyError
-from vexrag.usecases.preflight import preflight_ollama_models, preflight_target_system
+from vexrag.usecases.preflight import (
+    preflight_ollama_models,
+    preflight_target_system,
+    preflight_vllm_models,
+)
 from vexrag.usecases.scan_service import build_scan_command
 from vexrag.usecases.types import DoctorCheckResult, DoctorResult
 
@@ -20,6 +24,7 @@ def run_doctor(
     checks: list[tuple[str, Callable[[], None]]] = [
         ("target API availability", lambda: preflight_target_system(config)),
         ("Ollama endpoint + required models", lambda: preflight_ollama_models(config)),
+        ("vLLM endpoint + required models", lambda: preflight_vllm_models(config)),
         (
             config_label,
             lambda: build_scan_command(

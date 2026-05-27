@@ -9,10 +9,15 @@ from urllib.request import Request, urlopen
 from vexrag.usecases.errors import UseCaseConfigError, UseCaseDependencyError
 
 _ollama_models_cache: dict[str, set[str]] = {}
+_vllm_models_cache: dict[str, set[str]] = {}
 
 
 def clear_ollama_models_cache() -> None:
     _ollama_models_cache.clear()
+
+
+def clear_vllm_models_cache() -> None:
+    _vllm_models_cache.clear()
 
 
 def preflight_target_system(config: Mapping[str, Any]) -> None:
@@ -59,7 +64,34 @@ def preflight_ollama_models(config: Mapping[str, Any]) -> None:
             )
 
 
+def preflight_vllm_models(config: Mapping[str, Any]) -> None:
+    required_models = collect_vllm_models(config)
+    for base_url, models in required_models.items():
+        if not models:
+            continue
+        available = fetch_vllm_models(base_url)
+        missing = sorted(
+            model for model in models if not _model_available(model, available)
+        )
+        if missing:
+            raise UseCaseDependencyError(
+                "vLLM model(s) not available at "
+                f"{base_url}: {', '.join(missing)}. "
+                "Update your config to use deployed models or deploy missing models first."
+            )
+
+
 def collect_ollama_models(config: Mapping[str, Any]) -> dict[str, set[str]]:
+    return _collect_provider_models(config, provider_name="ollama")
+
+
+def collect_vllm_models(config: Mapping[str, Any]) -> dict[str, set[str]]:
+    return _collect_provider_models(config, provider_name="vllm")
+
+
+def _collect_provider_models(
+    config: Mapping[str, Any], *, provider_name: str
+) -> dict[str, set[str]]:
     found: dict[str, set[str]] = {}
 
     def _visit(node: Any) -> None:
@@ -69,7 +101,7 @@ def collect_ollama_models(config: Mapping[str, Any]) -> dict[str, set[str]]:
             model = node.get("model")
             if (
                 isinstance(provider, str)
-                and provider.strip().lower() == "ollama"
+                and provider.strip().lower() == provider_name
                 and isinstance(base_url, str)
                 and base_url.strip()
                 and isinstance(model, str)
@@ -119,6 +151,49 @@ def fetch_ollama_models(base_url: str) -> set[str]:
         if isinstance(name, str) and name.strip():
             names.add(name.strip())
     _ollama_models_cache[normalized] = names
+    return names
+
+
+def _vllm_models_list_url(base_url: str) -> str:
+    normalized = base_url.strip().rstrip("/")
+    if normalized.endswith("/v1"):
+        return f"{normalized}/models"
+    return f"{normalized}/v1/models"
+
+
+def fetch_vllm_models(base_url: str) -> set[str]:
+    normalized = base_url.strip().rstrip("/")
+    if normalized in _vllm_models_cache:
+        return _vllm_models_cache[normalized]
+
+    models_url = _vllm_models_list_url(normalized)
+    request = Request(
+        models_url,
+        headers={"Accept": "application/json"},
+        method="GET",
+    )
+    try:
+        with urlopen(request, timeout=5) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except (URLError, HTTPError, json.JSONDecodeError) as exc:
+        raise UseCaseDependencyError(
+            "could not query vLLM model list at "
+            f"{models_url} ({exc}). "
+            "Ensure vLLM is running and reachable."
+        ) from exc
+    models_raw = payload.get("data")
+    if not isinstance(models_raw, list):
+        raise UseCaseDependencyError(
+            f"unexpected vLLM models response at {models_url}: missing data list"
+        )
+    names: set[str] = set()
+    for model_info in models_raw:
+        if not isinstance(model_info, Mapping):
+            continue
+        model_id = model_info.get("id")
+        if isinstance(model_id, str) and model_id.strip():
+            names.add(model_id.strip())
+    _vllm_models_cache[normalized] = names
     return names
 
 
