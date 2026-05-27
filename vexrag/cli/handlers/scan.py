@@ -11,7 +11,11 @@ from vexrag.cli.presentation.scan_report import (
 from vexrag.core.scan.config import deep_merge_mappings
 from vexrag.core.scan.contracts import ScanCaseReport
 from vexrag.usecases.config_io import load_config
-from vexrag.usecases.preflight import preflight_ollama_models, preflight_target_system
+from vexrag.usecases.preflight import (
+    preflight_ollama_models,
+    preflight_target_system,
+    preflight_vllm_models,
+)
 from vexrag.usecases.scan_service import build_scan_command, run_scan
 
 LOGGER = logging.getLogger("vexrag.cli")
@@ -30,6 +34,7 @@ def run(args: argparse.Namespace) -> int:
     log_config_summary(config)
     preflight_target_system(config)
     preflight_ollama_models(config)
+    preflight_vllm_models(config)
     LOGGER.info("Building scan command")
     attack = None if args.attack is None else str(args.attack).strip().lower()
     command = build_scan_command(

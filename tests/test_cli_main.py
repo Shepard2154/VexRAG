@@ -8,7 +8,7 @@ from vexrag.cli.handlers import doctor as doctor_handler
 from vexrag.cli.handlers import generate_cases as generate_cases_handler
 from vexrag.cli.handlers import scan as scan_handler
 from vexrag.usecases import doctor as doctor_usecase
-from vexrag.usecases.errors import UseCaseConfigError
+from vexrag.usecases.errors import UseCaseConfigError, UseCaseDependencyError
 from vexrag.usecases.types import GenerateCasesResult
 
 
@@ -102,6 +102,7 @@ def _stub_scan_dependencies(monkeypatch) -> None:  # type: ignore[no-untyped-def
     monkeypatch.setattr(scan_handler, "load_config", lambda _: {})
     monkeypatch.setattr(scan_handler, "preflight_target_system", lambda _: None)
     monkeypatch.setattr(scan_handler, "preflight_ollama_models", lambda _: None)
+    monkeypatch.setattr(scan_handler, "preflight_vllm_models", lambda _: None)
     monkeypatch.setattr(
         scan_handler,
         "build_scan_command",
@@ -120,6 +121,7 @@ def test_doctor_command_passes(monkeypatch, capsys) -> None:
     monkeypatch.setattr(doctor_handler, "load_config", lambda _: {})
     monkeypatch.setattr(doctor_usecase, "preflight_target_system", lambda _: None)
     monkeypatch.setattr(doctor_usecase, "preflight_ollama_models", lambda _: None)
+    monkeypatch.setattr(doctor_usecase, "preflight_vllm_models", lambda _: None)
     monkeypatch.setattr(
         doctor_usecase,
         "build_scan_command",
@@ -140,6 +142,7 @@ def test_doctor_command_fails_when_check_fails(monkeypatch, capsys) -> None:
 
     monkeypatch.setattr(doctor_usecase, "preflight_target_system", _fail_target)
     monkeypatch.setattr(doctor_usecase, "preflight_ollama_models", lambda _: None)
+    monkeypatch.setattr(doctor_usecase, "preflight_vllm_models", lambda _: None)
     monkeypatch.setattr(
         doctor_usecase,
         "build_scan_command",
@@ -150,6 +153,61 @@ def test_doctor_command_fails_when_check_fails(monkeypatch, capsys) -> None:
     assert status == 1
     assert "[FAIL] target API availability" in captured.out
     assert "Doctor verdict: FAIL" in captured.out
+
+
+def test_doctor_usecase_passes_without_vllm_sections(monkeypatch) -> None:
+    monkeypatch.setattr(doctor_usecase, "preflight_target_system", lambda _: None)
+    monkeypatch.setattr(doctor_usecase, "preflight_ollama_models", lambda _: None)
+    monkeypatch.setattr(
+        doctor_usecase, "build_scan_command", lambda *_args, **_kwargs: None
+    )
+    result = doctor_usecase.run_doctor(config={}, base_dir=Path("."), check_llms=False)
+    assert all(check.ok for check in result.checks)
+    assert any(
+        check.name == "vLLM endpoint + required models" for check in result.checks
+    )
+
+
+def test_doctor_usecase_fails_when_vllm_endpoint_unreachable(monkeypatch) -> None:
+    monkeypatch.setattr(doctor_usecase, "preflight_target_system", lambda _: None)
+    monkeypatch.setattr(doctor_usecase, "preflight_ollama_models", lambda _: None)
+    monkeypatch.setattr(
+        doctor_usecase, "build_scan_command", lambda *_args, **_kwargs: None
+    )
+
+    def _fail_vllm(_config: object) -> None:
+        raise UseCaseDependencyError("could not query vLLM model list")
+
+    monkeypatch.setattr(doctor_usecase, "preflight_vllm_models", _fail_vllm)
+    result = doctor_usecase.run_doctor(config={}, base_dir=Path("."), check_llms=False)
+    vllm_check = next(
+        check
+        for check in result.checks
+        if check.name == "vLLM endpoint + required models"
+    )
+    assert vllm_check.ok is False
+    assert "could not query vLLM model list" in (vllm_check.error or "")
+
+
+def test_doctor_usecase_fails_when_vllm_model_missing(monkeypatch) -> None:
+    monkeypatch.setattr(doctor_usecase, "preflight_target_system", lambda _: None)
+    monkeypatch.setattr(doctor_usecase, "preflight_ollama_models", lambda _: None)
+    monkeypatch.setattr(
+        doctor_usecase, "build_scan_command", lambda *_args, **_kwargs: None
+    )
+
+    def _fail_vllm(_config: object) -> None:
+        raise UseCaseDependencyError("vLLM model(s) not available")
+
+    monkeypatch.setattr(doctor_usecase, "preflight_vllm_models", _fail_vllm)
+    result = doctor_usecase.run_doctor(config={}, base_dir=Path("."), check_llms=False)
+    vllm_check = next(
+        check
+        for check in result.checks
+        if check.name == "vLLM endpoint + required models"
+    )
+    assert vllm_check.ok is False
+    assert "vLLM model(s) not available" in (vllm_check.error or "")
 
 
 def test_generate_cases_command_prints_summary(
@@ -311,6 +369,19 @@ def test_scan_build_passes_probe_llms(monkeypatch) -> None:
     status = cli_main.main(["scan", "--config", str(Path("scan.yml"))])
     assert status == 0
     assert captured.get("probe_llms") is True
+
+
+def test_scan_calls_vllm_preflight(monkeypatch) -> None:
+    called: dict[str, bool] = {"vllm": False}
+
+    def _capture_vllm(_config: object) -> None:
+        called["vllm"] = True
+
+    _stub_scan_dependencies(monkeypatch)
+    monkeypatch.setattr(scan_handler, "preflight_vllm_models", _capture_vllm)
+    status = cli_main.main(["scan", "--config", str(Path("scan.yml"))])
+    assert status == 0
+    assert called["vllm"] is True
 
 
 def test_cli_package_imports() -> None:
