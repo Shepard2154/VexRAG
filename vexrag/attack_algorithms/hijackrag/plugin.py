@@ -166,7 +166,9 @@ def _build_hijackrag_request(
         case_id=case_config_accessor.get_optional_string(
             "case_id", case_config_accessor.get_optional_string("id")
         ),
-        adv_per_query=case_config_accessor.get_optional_int("adv_per_query", 1),
+        adv_per_query=case_config_accessor.get_optional_int(
+            "adv_per_query", HIJACKRAG_SCAN_PROFILE.default_adv_per_query
+        ),
         segment_ids=_hijack_segment_ids_from_case(case_config, prefix),
         correct_answer_style=correct_answer_style_option(
             case_config,
@@ -199,7 +201,10 @@ def _serialize_case_for_yaml(case: Any) -> Mapping[str, Any]:
     query = str(getattr(case, "query", "") or "").strip()
     correct_answer = str(getattr(case, "correct_answer", "") or "").strip()
     hijack_insert = str(getattr(case, "hijack_insert", "") or "").strip()
-    adv_per_query = int(getattr(case, "adv_per_query", 1) or 1)
+    adv_per_query = int(
+        getattr(case, "adv_per_query", HIJACKRAG_SCAN_PROFILE.default_adv_per_query)
+        or HIJACKRAG_SCAN_PROFILE.default_adv_per_query
+    )
     if not query or not correct_answer or not hijack_insert:
         raise ScanConfigError("generated HijackRAG case is missing required fields")
     if not case_id:

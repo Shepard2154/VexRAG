@@ -1,4 +1,4 @@
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -14,7 +14,7 @@ from vexrag.core.scan.config import (
     parse_attack_steps,
     resolve_generate_cases_attack_id,
 )
-from vexrag.core.scan.contracts import ScanCommand
+from vexrag.core.scan.contracts import ScanCaseReport, ScanCommand, ScanReport
 from vexrag.core.scan.execution import (
     AttackChainScanCommand,
     probe_scan_llms_for_materialized_config,
@@ -26,6 +26,7 @@ def build_scan_command(
     *,
     base_dir: Path | None = None,
     attack: str | None = None,
+    probe_llms: bool = False,
 ) -> ScanCommand:
     attack_methods = create_attack_method_registry()
     registries = create_scan_registries(base_dir=base_dir)
@@ -39,12 +40,13 @@ def build_scan_command(
         steps = filtered
     if len(steps) == 1:
         materialized = materialize_step_config(config, steps[0])
-        probe_scan_llms_for_materialized_config(
-            materialized,
-            attack_id=steps[0].attack_id,
-            registries=registries,
-            step_label=f"attack step ({steps[0].attack_id})",
-        )
+        if probe_llms:
+            probe_scan_llms_for_materialized_config(
+                materialized,
+                attack_id=steps[0].attack_id,
+                registries=registries,
+                step_label=f"attack step ({steps[0].attack_id})",
+            )
         return attack_methods.get(steps[0].attack_id).build_scan_command(
             materialized,
             base_dir,
@@ -52,12 +54,13 @@ def build_scan_command(
     built: list[tuple[str, ScanCommand]] = []
     for step_index, step in enumerate(steps, start=1):
         materialized = materialize_step_config(config, step)
-        probe_scan_llms_for_materialized_config(
-            materialized,
-            attack_id=step.attack_id,
-            registries=registries,
-            step_label=f"chain step {step_index}/{len(steps)} ({step.attack_id})",
-        )
+        if probe_llms:
+            probe_scan_llms_for_materialized_config(
+                materialized,
+                attack_id=step.attack_id,
+                registries=registries,
+                step_label=f"chain step {step_index}/{len(steps)} ({step.attack_id})",
+            )
         built.append(
             (
                 step.attack_id,
@@ -68,6 +71,14 @@ def build_scan_command(
             )
         )
     return AttackChainScanCommand(tuple(built))
+
+
+def run_scan(
+    command: ScanCommand,
+    *,
+    on_case_complete: Callable[[ScanCaseReport], None] | None = None,
+) -> ScanReport:
+    return command.run(on_case_complete=on_case_complete)
 
 
 def resolve_attack_method(config: Mapping[str, Any]) -> str:
@@ -123,7 +134,6 @@ def materialize_generate_cases_config(
     *,
     attack_id: str,
 ) -> dict[str, Any]:
-    """Return a single-attack config for ``generate_cases`` / plugin generators."""
     attack_methods = create_attack_method_registry()
     return materialize_config_for_attack_id(
         config,

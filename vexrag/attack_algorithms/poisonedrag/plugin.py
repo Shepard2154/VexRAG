@@ -114,7 +114,9 @@ def _build_poisonedrag_request(
         case_id=case_config_accessor.get_optional_string(
             "case_id", case_config_accessor.get_optional_string("id")
         ),
-        adv_per_query=case_config_accessor.get_optional_int("adv_per_query", 3),
+        adv_per_query=case_config_accessor.get_optional_int(
+            "adv_per_query", POISONEDRAG_SCAN_PROFILE.default_adv_per_query
+        ),
         target_style=target_style_option(
             case_config,
             default=target_style_option(attack_config),
@@ -143,7 +145,7 @@ def _build_automatic_case_generator(
     return AutomaticPoisonedRAGCaseGenerator(llm_client=llm_client)
 
 
-def _serialize_case_for_yaml(case: Any) -> Mapping[str, str]:
+def _serialize_case_for_yaml(case: Any) -> Mapping[str, Any]:
     case_id = str(getattr(case, "case_id", "") or "").strip()
     query = str(getattr(case, "query", "") or "").strip()
     correct_answer = str(getattr(case, "correct_answer", "") or "").strip()
@@ -154,11 +156,16 @@ def _serialize_case_for_yaml(case: Any) -> Mapping[str, str]:
         raise ScanConfigError("generated case is missing required fields")
     if not case_id:
         case_id = stable_generated_case_id(query)
+    adv_per_query = int(
+        getattr(case, "adv_per_query", POISONEDRAG_SCAN_PROFILE.default_adv_per_query)
+        or POISONEDRAG_SCAN_PROFILE.default_adv_per_query
+    )
     return {
         "id": case_id,
         "query": query,
         "correct_answer": correct_answer,
         "target_incorrect_answer": target_incorrect_answer,
+        "adv_per_query": adv_per_query,
     }
 
 
@@ -172,6 +179,7 @@ def _generate_cases(
             count=params.count,
             topic=params.topic,
             target_style=params.target_style,
+            adv_per_query=params.adv_per_query,
             seed=params.seed,
         )
     )

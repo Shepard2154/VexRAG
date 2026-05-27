@@ -18,7 +18,7 @@ class AttackStepSpec:
     params: Mapping[str, Any]
     scan_override: Mapping[str, Any] | None
     evaluation_override: Mapping[str, Any] | None
-    evaluations_override: Mapping[str, Any] | None
+    evaluations_override: Mapping[str, Any] | None  # TODO: remove?
 
 
 def parse_attack_steps(
@@ -48,7 +48,7 @@ def parse_attack_steps(
         attack_id_raw = item.get("id")
         if not isinstance(attack_id_raw, str) or not attack_id_raw.strip():
             raise ScanConfigError(f"attacks[{index}].id must be a non-empty string")
-        attack_id = attack_id_raw.strip()
+        attack_id = attack_id_raw.strip().lower()
         registry.get(attack_id)
 
         params_raw = item.get("params", {})
@@ -154,10 +154,11 @@ def materialize_config_for_attack_id(
     registry: AttackMethodRegistry,
 ) -> dict[str, Any]:
     """Materialize the scan config for the first step matching ``attack_id``."""
-    registry.get(attack_id)
+    normalized = str(attack_id).strip().lower()
+    registry.get(normalized)
     for step in parse_attack_steps(root, registry):
-        if step.attack_id == attack_id:
+        if step.attack_id == normalized:
             return materialize_step_config(root, step)
     raise AttackMethodRegistryError(
-        f"no attacks step with id {attack_id!r} in the scan YAML"
+        f"no attacks step with id {normalized!r} in the scan YAML"
     )

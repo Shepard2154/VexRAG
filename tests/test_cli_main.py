@@ -4,6 +4,10 @@ from pathlib import Path
 import pytest
 
 from vexrag.cli import main as cli_main
+from vexrag.cli.handlers import doctor as doctor_handler
+from vexrag.cli.handlers import scan as scan_handler
+from vexrag.usecases import doctor as doctor_usecase
+from vexrag.usecases.errors import UseCaseConfigError
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,21 +96,33 @@ class _DummyCommand:
         )
 
 
-def _stub_cli_dependencies(monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    monkeypatch.setattr(cli_main, "_load_config", lambda _: {})
-    monkeypatch.setattr(cli_main, "_log_config_summary", lambda _: None)
-    monkeypatch.setattr(cli_main, "_run_preflight_checks", lambda _: None)
+def _stub_scan_dependencies(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.setattr(scan_handler, "load_config", lambda _: {})
+    monkeypatch.setattr(scan_handler, "preflight_target_system", lambda _: None)
+    monkeypatch.setattr(scan_handler, "preflight_ollama_models", lambda _: None)
     monkeypatch.setattr(
-        cli_main,
+        scan_handler,
         "build_scan_command",
         lambda *_args, **_kwargs: _DummyCommand(),
+    )
+    monkeypatch.setattr(
+        scan_handler,
+        "run_scan",
+        lambda command, *, on_case_complete=None: command.run(
+            on_case_complete=on_case_complete
+        ),
     )
 
 
 def test_doctor_command_passes(monkeypatch, capsys) -> None:
-    _stub_cli_dependencies(monkeypatch)
-    monkeypatch.setattr(cli_main, "_preflight_target_system", lambda _: None)
-    monkeypatch.setattr(cli_main, "_preflight_ollama_models", lambda _: None)
+    monkeypatch.setattr(doctor_handler, "load_config", lambda _: {})
+    monkeypatch.setattr(doctor_usecase, "preflight_target_system", lambda _: None)
+    monkeypatch.setattr(doctor_usecase, "preflight_ollama_models", lambda _: None)
+    monkeypatch.setattr(
+        doctor_usecase,
+        "build_scan_command",
+        lambda *_args, **_kwargs: _DummyCommand(),
+    )
     status = cli_main.main(["doctor", "--config", str(Path("scan.yml"))])
     captured = capsys.readouterr()
     assert status == 0
@@ -115,24 +131,98 @@ def test_doctor_command_passes(monkeypatch, capsys) -> None:
 
 
 def test_scan_uses_compact_output_by_default(monkeypatch, capsys) -> None:
-    _stub_cli_dependencies(monkeypatch)
+    _stub_scan_dependencies(monkeypatch)
     status = cli_main.main(["scan", "--config", str(Path("scan.yml"))])
     captured = capsys.readouterr()
     assert status == 0
     assert "Case details:" not in captured.out
     assert "Final verdict:" in captured.out
+    assert captured.out.count("Final verdict:") == 1
+    assert captured.out.count("ASR:") == 1
 
 
 def test_scan_detailed_prints_case_details(monkeypatch, capsys) -> None:
-    _stub_cli_dependencies(monkeypatch)
+    _stub_scan_dependencies(monkeypatch)
     status = cli_main.main(["scan", "--config", str(Path("scan.yml")), "--detailed"])
     captured = capsys.readouterr()
     assert status == 0
     assert "Case details:" in captured.out
 
 
+def test_scan_quiet_suppresses_detailed_even_with_detailed_flag(
+    monkeypatch, capsys
+) -> None:
+    _stub_scan_dependencies(monkeypatch)
+    status = cli_main.main(
+        [
+            "scan",
+            "--config",
+            str(Path("scan.yml")),
+            "--quiet",
+            "--detailed",
+        ]
+    )
+    captured = capsys.readouterr()
+    assert status == 0
+    assert "Case details:" not in captured.out
+    assert "VexRAG Scan" not in captured.out
+
+
+def test_scan_quiet_still_prints_warnings(monkeypatch, capsys) -> None:
+    _stub_scan_dependencies(monkeypatch)
+
+    class _WarningCommand(_DummyCommand):
+        def run(self, *, on_case_complete=None):  # type: ignore[no-untyped-def]
+            report = super().run(on_case_complete=on_case_complete)
+            return _DummyReport(
+                verdict=report.verdict,
+                cases=report.cases,
+                warnings=("quiet-mode warning",),
+            )
+
+    monkeypatch.setattr(
+        scan_handler,
+        "build_scan_command",
+        lambda *_args, **_kwargs: _WarningCommand(),
+    )
+    status = cli_main.main(["scan", "--config", str(Path("scan.yml")), "--quiet"])
+    captured = capsys.readouterr()
+    assert status == 0
+    assert "Warnings:" in captured.out
+    assert "quiet-mode warning" in captured.out
+
+
+def test_scan_build_passes_probe_llms(monkeypatch) -> None:
+    captured: dict[str, bool] = {}
+
+    def _capture_build(*_args, **kwargs) -> _DummyCommand:
+        captured["probe_llms"] = bool(kwargs.get("probe_llms"))
+        return _DummyCommand()
+
+    _stub_scan_dependencies(monkeypatch)
+    monkeypatch.setattr(scan_handler, "build_scan_command", _capture_build)
+    status = cli_main.main(["scan", "--config", str(Path("scan.yml"))])
+    assert status == 0
+    assert captured.get("probe_llms") is True
+
+
+def test_cli_package_imports() -> None:
+    import vexrag.cli  # noqa: F401
+
+
+def test_config_error_exit_code(monkeypatch) -> None:
+    def _raise_config(_path: Path) -> dict:
+        raise UseCaseConfigError("bad config")
+
+    monkeypatch.setattr(scan_handler, "load_config", _raise_config)
+    status = cli_main.main(["scan", "--config", str(Path("scan.yml"))])
+    assert status == 2
+
+
 def test_version_flag_prints_and_exits_zero(monkeypatch, capsys) -> None:
-    monkeypatch.setattr(cli_main, "_distribution_version", lambda: "0.0.0-test")
+    from vexrag.cli import parser as cli_parser
+
+    monkeypatch.setattr(cli_parser, "distribution_version", lambda: "0.0.0-test")
     with pytest.raises(SystemExit) as exc_info:
         cli_main.main(["--version"])
     assert exc_info.value.code == 0
@@ -141,7 +231,9 @@ def test_version_flag_prints_and_exits_zero(monkeypatch, capsys) -> None:
 
 
 def test_short_version_flag_prints_and_exits_zero(monkeypatch, capsys) -> None:
-    monkeypatch.setattr(cli_main, "_distribution_version", lambda: "0.0.0-test")
+    from vexrag.cli import parser as cli_parser
+
+    monkeypatch.setattr(cli_parser, "distribution_version", lambda: "0.0.0-test")
     with pytest.raises(SystemExit) as exc_info:
         cli_main.main(["-V"])
     assert exc_info.value.code == 0

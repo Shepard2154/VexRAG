@@ -32,3 +32,18 @@ def test_registry_unknown_get_raises() -> None:
     reg = builder.build()
     with pytest.raises(AttackMethodRegistryError, match="unknown attack"):
         reg.get("missing")
+
+
+def test_registry_default_adv_per_query_from_plugins() -> None:
+    from vexrag.attack_algorithms.registries import create_attack_method_registry
+
+    reg = create_attack_method_registry()
+    assert reg.get("hijackrag").default_adv_per_query == 1
+    assert reg.get("poisonedrag").default_adv_per_query == 5
+
+
+def test_default_adv_per_query_usecase() -> None:
+    from vexrag.usecases.generate_cases import default_adv_per_query
+
+    assert default_adv_per_query("hijackrag") == 1
+    assert default_adv_per_query("poisonedrag") == 5

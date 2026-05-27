@@ -38,3 +38,4 @@ class AttackMethodConfigurator:
         [Mapping[str, Any], GenerateCasesParams],
         list[Any],
     ]
+    default_adv_per_query: int = 1
