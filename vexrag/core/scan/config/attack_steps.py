@@ -7,7 +7,7 @@ from vexrag.core.attack_configurator.registry import AttackMethodRegistry
 from vexrag.core.scan.config.errors import ScanConfigError
 from vexrag.core.scan.config.merge import deep_merge_mappings
 
-_STEP_KEYS = frozenset({"id", "params", "scan", "evaluation", "evaluations"})
+_STEP_KEYS = frozenset({"id", "params", "scan", "evaluation"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -18,7 +18,6 @@ class AttackStepSpec:
     params: Mapping[str, Any]
     scan_override: Mapping[str, Any] | None
     evaluation_override: Mapping[str, Any] | None
-    evaluations_override: Mapping[str, Any] | None  # TODO: remove?
 
 
 def parse_attack_steps(
@@ -65,19 +64,12 @@ def parse_attack_steps(
                 f"attacks[{index}].evaluation must be a mapping when set"
             )
 
-        evals_ov = item.get("evaluations")
-        if evals_ov is not None and not isinstance(evals_ov, Mapping):
-            raise ScanConfigError(
-                f"attacks[{index}].evaluations must be a mapping when set"
-            )
-
         steps.append(
             AttackStepSpec(
                 attack_id=attack_id,
                 params=params_raw,
                 scan_override=scan_ov,
                 evaluation_override=eval_ov,
-                evaluations_override=evals_ov,
             )
         )
     return tuple(steps)
@@ -108,17 +100,6 @@ def materialize_step_config(
         out["evaluation"] = deep_merge_mappings(base_eval, step.evaluation_override)
     elif "evaluation" in root:
         out["evaluation"] = dict(base_eval)
-
-    base_evaluations = root.get("evaluations")
-    if not isinstance(base_evaluations, Mapping):
-        base_evaluations = {}
-    if step.evaluations_override:
-        out["evaluations"] = deep_merge_mappings(
-            base_evaluations,
-            step.evaluations_override,
-        )
-    elif "evaluations" in root:
-        out["evaluations"] = dict(base_evaluations)
 
     return out
 
