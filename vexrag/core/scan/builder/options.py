@@ -55,10 +55,10 @@ def poisoning_style_option(
 def cleanup_option(scan_config: Mapping[str, object]) -> bool:
     poison_config = corpus_poisoning_section({"scan": scan_config})
     if poison_config is None:
-        return False
+        return True
     accessor = ConfigAccessor(
         poison_config,
         prefix="scan.corpus_poisoning",
         error_type=ScanConfigError,
     )
-    return accessor.get_bool("cleanup", False)
+    return accessor.get_bool("cleanup", True)
