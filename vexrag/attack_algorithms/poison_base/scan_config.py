@@ -14,7 +14,7 @@ class CorpusPoisonScanConfig:
     repetitions: int = 1
     attack_success_rate_threshold: float = 0.0
     override_contexts: bool = False
-    cleanup: bool = False
+    cleanup: bool = True
 
     def __post_init__(self) -> None:
         if self.repetitions < 1:

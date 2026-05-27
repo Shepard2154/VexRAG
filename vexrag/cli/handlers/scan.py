@@ -104,15 +104,8 @@ def log_config_summary(config: Mapping) -> None:
         if ids:
             LOGGER.info("Attacks (%d): %s", len(ids), ", ".join(ids))
 
-    evaluations = config.get("evaluations")
-    if isinstance(evaluations, Mapping):
-        raw_list = evaluations.get("evaluators")
-        n = len(raw_list) if isinstance(raw_list, list) else 0
-        combine = evaluations.get("combine", "any")
-        LOGGER.info("Evaluations: %d evaluator(s), combine=%s", n, combine)
-
     evaluation = config.get("evaluation")
-    if isinstance(evaluation, Mapping) and not isinstance(evaluations, Mapping):
+    if isinstance(evaluation, Mapping):
         strategy = evaluation.get("strategy", "embedding_similarity")
         LOGGER.info("Evaluation: %s", strategy)
 
