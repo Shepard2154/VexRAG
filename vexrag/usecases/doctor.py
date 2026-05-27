@@ -5,6 +5,7 @@ from vexrag.core.scan.config.errors import ScanConfigError
 from vexrag.usecases.errors import UseCaseConfigError, UseCaseDependencyError
 from vexrag.usecases.preflight import preflight_ollama_models, preflight_target_system
 from vexrag.usecases.scan_service import build_scan_command
+from vexrag.usecases.types import DoctorCheckResult, DoctorResult
 
 
 def run_doctor(
@@ -12,7 +13,7 @@ def run_doctor(
     *,
     base_dir: Any,
     check_llms: bool = False,
-) -> int:
+) -> DoctorResult:
     config_label = (
         "scan config validity + LLM probe" if check_llms else "scan config validity"
     )
@@ -29,7 +30,7 @@ def run_doctor(
         ),
     ]
 
-    results: list[tuple[str, bool, str | None]] = []
+    results: list[DoctorCheckResult] = []
     for name, check in checks:
         try:
             check()
@@ -40,22 +41,8 @@ def run_doctor(
             ValueError,
             RuntimeError,
         ) as exc:
-            results.append((name, False, str(exc)))
+            results.append(DoctorCheckResult(name=name, ok=False, error=str(exc)))
         else:
-            results.append((name, True, None))
+            results.append(DoctorCheckResult(name=name, ok=True, error=None))
 
-    print("VexRAG Doctor")
-    print()
-    for name, ok, error in results:
-        icon = "OK" if ok else "FAIL"
-        print(f"[{icon}] {name}")
-        if error:
-            print(f"  -> {error}")
-
-    failed = [name for name, ok, _ in results if not ok]
-    print()
-    if failed:
-        print(f"Doctor verdict: FAIL ({len(failed)} check(s) failed)")
-        return 1
-    print("Doctor verdict: PASS")
-    return 0
+    return DoctorResult(checks=tuple(results))

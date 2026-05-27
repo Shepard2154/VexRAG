@@ -2,6 +2,7 @@ import argparse
 import logging
 
 from vexrag.cli.logging_setup import configure_logging
+from vexrag.cli.presentation.generate_cases_report import print_generate_cases_result
 from vexrag.usecases.config_io import load_config
 from vexrag.usecases.generate_cases import run_generate_cases
 
@@ -12,7 +13,7 @@ def run(args: argparse.Namespace) -> int:
     configure_logging(quiet=args.quiet, debug=args.debug)
     LOGGER.info("Loading generation config: %s", args.config)
     config = load_config(args.config)
-    run_generate_cases(
+    result = run_generate_cases(
         config,
         attack=str(args.attack),
         output=args.output,
@@ -22,6 +23,6 @@ def run(args: argparse.Namespace) -> int:
         adv_per_query=args.adv_per_query,
         seed=args.seed,
         overwrite=bool(args.overwrite),
-        quiet=bool(args.quiet),
     )
+    print_generate_cases_result(result, quiet=bool(args.quiet))
     return 0

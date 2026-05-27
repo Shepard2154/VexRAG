@@ -5,9 +5,11 @@ import pytest
 
 from vexrag.cli import main as cli_main
 from vexrag.cli.handlers import doctor as doctor_handler
+from vexrag.cli.handlers import generate_cases as generate_cases_handler
 from vexrag.cli.handlers import scan as scan_handler
 from vexrag.usecases import doctor as doctor_usecase
 from vexrag.usecases.errors import UseCaseConfigError
+from vexrag.usecases.types import GenerateCasesResult
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,6 +130,111 @@ def test_doctor_command_passes(monkeypatch, capsys) -> None:
     assert status == 0
     assert "VexRAG Doctor" in captured.out
     assert "Doctor verdict: PASS" in captured.out
+
+
+def test_doctor_command_fails_when_check_fails(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(doctor_handler, "load_config", lambda _: {})
+
+    def _fail_target(_config: object) -> None:
+        raise RuntimeError("target down")
+
+    monkeypatch.setattr(doctor_usecase, "preflight_target_system", _fail_target)
+    monkeypatch.setattr(doctor_usecase, "preflight_ollama_models", lambda _: None)
+    monkeypatch.setattr(
+        doctor_usecase,
+        "build_scan_command",
+        lambda *_args, **_kwargs: _DummyCommand(),
+    )
+    status = cli_main.main(["doctor", "--config", str(Path("scan.yml"))])
+    captured = capsys.readouterr()
+    assert status == 1
+    assert "[FAIL] target API availability" in captured.out
+    assert "Doctor verdict: FAIL" in captured.out
+
+
+def test_generate_cases_command_prints_summary(
+    monkeypatch, capsys, tmp_path: Path
+) -> None:
+    output_path = tmp_path / "cases.yml"
+
+    def _stub_run(*_args, **_kwargs) -> GenerateCasesResult:
+        return GenerateCasesResult(
+            attack_id="hijackrag",
+            display_name="HijackRAG",
+            output_path=output_path,
+            case_count=3,
+            topic="widgets",
+            adv_per_query=2,
+        )
+
+    monkeypatch.setattr(generate_cases_handler, "load_config", lambda _: {})
+    monkeypatch.setattr(generate_cases_handler, "run_generate_cases", _stub_run)
+    status = cli_main.main(
+        [
+            "generate-cases",
+            "--config",
+            str(Path("scan.yml")),
+            "--attack",
+            "hijackrag",
+            "--output",
+            str(output_path),
+            "--count",
+            "3",
+            "--topic",
+            "widgets",
+        ]
+    )
+    captured = capsys.readouterr()
+    assert status == 0
+    assert "Generated HijackRAG cases" in captured.out
+    assert str(output_path) in captured.out
+    assert "Cases: 3" in captured.out
+    assert "Topic: widgets" in captured.out
+    assert "case_files: ['" in captured.out
+    assert "adv_per_query: 2" in captured.out
+
+
+def test_generate_cases_quiet_prints_path_only(
+    monkeypatch, capsys, tmp_path: Path
+) -> None:
+    output_path = tmp_path / "cases.yml"
+
+    def _stub_run(*_args, **_kwargs) -> GenerateCasesResult:
+        return GenerateCasesResult(
+            attack_id="hijackrag",
+            display_name="HijackRAG",
+            output_path=output_path,
+            case_count=1,
+            topic=None,
+            adv_per_query=1,
+        )
+
+    monkeypatch.setattr(generate_cases_handler, "load_config", lambda _: {})
+    monkeypatch.setattr(generate_cases_handler, "run_generate_cases", _stub_run)
+    status = cli_main.main(
+        [
+            "generate-cases",
+            "--config",
+            str(Path("scan.yml")),
+            "--attack",
+            "hijackrag",
+            "--output",
+            str(output_path),
+            "--quiet",
+        ]
+    )
+    captured = capsys.readouterr()
+    assert status == 0
+    assert captured.out.strip() == str(output_path)
+
+
+def test_usecases_have_no_print_calls() -> None:
+    usecases_dir = Path(__file__).resolve().parents[1] / "vexrag" / "usecases"
+    offenders: list[str] = []
+    for path in sorted(usecases_dir.rglob("*.py")):
+        if "print(" in path.read_text(encoding="utf-8"):
+            offenders.append(str(path.relative_to(usecases_dir.parent.parent)))
+    assert offenders == []
 
 
 def test_scan_uses_compact_output_by_default(monkeypatch, capsys) -> None:

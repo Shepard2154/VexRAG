@@ -10,6 +10,7 @@ from vexrag.usecases.scan_service import (
     materialize_generate_cases_config,
     resolve_generate_cases_attack,
 )
+from vexrag.usecases.types import GenerateCasesResult
 
 
 def default_adv_per_query(attack_id: str) -> int:
@@ -27,8 +28,7 @@ def run_generate_cases(
     adv_per_query: int | None,
     seed: int | None,
     overwrite: bool,
-    quiet: bool,
-) -> Path:
+) -> GenerateCasesResult:
     explicit = None if attack == "auto" else str(attack).strip().lower()
     attack_kind = resolve_generate_cases_attack(config, explicit=explicit)
 
@@ -62,21 +62,11 @@ def run_generate_cases(
     payload = {"cases": [plugin.serialize_case_for_yaml(case) for case in cases]}
     write_yaml(output_path, payload)
 
-    if quiet:
-        print(output_path)
-        return output_path
-
-    yaml_attack = plugin.attack_id
-    print(f"Generated {plugin.display_name} cases")
-    print(f"Output: {output_path}")
-    print(f"Cases: {len(cases)}")
-    if topic:
-        print(f"Topic: {topic}")
-    print()
-    print("Use in config:")
-    print(
-        "  attacks: [ { id: "
-        f"{yaml_attack}, params: {{ case_files: ['{output_path}'], "
-        f"adv_per_query: {adv} }} }} ]"
+    return GenerateCasesResult(
+        attack_id=plugin.attack_id,
+        display_name=plugin.display_name,
+        output_path=output_path,
+        case_count=len(cases),
+        topic=topic,
+        adv_per_query=adv,
     )
-    return output_path
