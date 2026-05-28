@@ -16,7 +16,11 @@ from vexrag.usecases.preflight import (
     preflight_target_system,
     preflight_vllm_models,
 )
-from vexrag.usecases.scan_service import build_scan_command, run_scan
+from vexrag.usecases.scan_service import (
+    build_scan_command,
+    materialize_preflight_config,
+    run_scan,
+)
 
 LOGGER = logging.getLogger("vexrag.cli")
 
@@ -24,6 +28,7 @@ LOGGER = logging.getLogger("vexrag.cli")
 def run(args: argparse.Namespace) -> int:
     output_mode = resolve_output_mode(quiet=args.quiet, detailed=args.detailed)
     configure_logging(quiet=output_mode is OutputMode.QUIET, debug=args.debug)
+    attack = None if args.attack is None else str(args.attack).strip().lower()
     LOGGER.info("Loading scan config: %s", args.config)
     config = load_config(args.config)
     if args.debug:
@@ -32,11 +37,11 @@ def run(args: argparse.Namespace) -> int:
             {"scan": {"debug_include_raw_target_response": True}},
         )
     log_config_summary(config)
-    preflight_target_system(config)
-    preflight_ollama_models(config)
-    preflight_vllm_models(config)
+    preflight_config = materialize_preflight_config(config, attack_id=attack)
+    preflight_target_system(preflight_config)
+    preflight_ollama_models(preflight_config)
+    preflight_vllm_models(preflight_config)
     LOGGER.info("Building scan command")
-    attack = None if args.attack is None else str(args.attack).strip().lower()
     command = build_scan_command(
         config,
         base_dir=args.config.parent,

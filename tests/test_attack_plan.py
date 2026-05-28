@@ -60,7 +60,6 @@ def test_materialize_merges_scan_and_evaluation() -> None:
         params={"k": 1},
         scan_override={"corpus_poisoning": {"filename_prefix": "pfx"}},
         evaluation_override={"strategy": "llm_judge"},
-        evaluations_override=None,
     )
     root = {
         "target_system": {"http": {"base_url": "http://x"}},
