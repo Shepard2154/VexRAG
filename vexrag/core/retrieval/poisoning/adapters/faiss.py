@@ -1,4 +1,6 @@
 import json
+import os
+import shutil
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -28,7 +30,8 @@ def _assert_ntotal_matches(index: Any, ordered_ids: Sequence[int]) -> None:
     if ntotal != len(ordered_ids):
         raise CorpusPoisoningError(
             f"faiss index.ntotal ({ntotal}) does not match len(ordered_ids) "
-            f"({len(ordered_ids)})"
+            f"({len(ordered_ids)}); this can indicate a partial/incomplete write "
+            f"of index.faiss and metadata.json"
         )
 
 
@@ -61,13 +64,75 @@ def _persist_faiss_corpus(
     *,
     os_error_message: str,
 ) -> None:
+    index_tmp = index_path.with_name(f".{index_path.name}.tmp")
+    metadata_tmp = metadata_path.with_name(f".{metadata_path.name}.tmp")
+    index_backup = index_path.with_name(f".{index_path.name}.bak")
+    metadata_backup = metadata_path.with_name(f".{metadata_path.name}.bak")
+    metadata_payload = json.dumps(
+        {"ordered_ids": ordered_ids}, ensure_ascii=False, indent=2
+    )
+
+    def _fsync_dir(path: Path) -> None:
+        dir_fd = os.open(str(path.parent), os.O_RDONLY)
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
+
+    def _cleanup_temp_files() -> None:
+        for temp_path in (index_tmp, metadata_tmp):
+            try:
+                temp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+    def _cleanup_backup_files() -> None:
+        for backup_path in (index_backup, metadata_backup):
+            try:
+                backup_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+    def _restore_from_backup(target: Path, backup: Path) -> None:
+        if not backup.is_file():
+            return
+        shutil.copy2(backup, target)
+        with target.open("rb") as fh:
+            os.fsync(fh.fileno())
+
     try:
-        faiss.write_index(index, str(index_path))
-        metadata_path.write_text(
-            json.dumps({"ordered_ids": ordered_ids}, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        faiss.write_index(index, str(index_tmp))
+        with index_tmp.open("rb") as fh:
+            os.fsync(fh.fileno())
+
+        with metadata_tmp.open("w", encoding="utf-8") as fh:
+            fh.write(metadata_payload)
+            fh.flush()
+            os.fsync(fh.fileno())
+
+        shutil.copy2(index_path, index_backup)
+        with index_backup.open("rb") as fh:
+            os.fsync(fh.fileno())
+        shutil.copy2(metadata_path, metadata_backup)
+        with metadata_backup.open("rb") as fh:
+            os.fsync(fh.fileno())
+
+        os.replace(str(index_tmp), str(index_path))
+        _fsync_dir(index_path)
+
+        os.replace(str(metadata_tmp), str(metadata_path))
+        _fsync_dir(metadata_path)
+        _cleanup_backup_files()
     except OSError as exc:
+        _cleanup_temp_files()
+        try:
+            _restore_from_backup(index_path, index_backup)
+            _restore_from_backup(metadata_path, metadata_backup)
+            _fsync_dir(index_path)
+            _fsync_dir(metadata_path)
+        except OSError:
+            pass
+        _cleanup_backup_files()
         raise CorpusPoisoningError(os_error_message) from exc
 
 
