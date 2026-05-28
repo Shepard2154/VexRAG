@@ -140,3 +140,18 @@ def materialize_generate_cases_config(
         attack_id,
         registry=attack_methods,
     )
+
+
+def materialize_preflight_config(
+    config: Mapping[str, Any],
+    *,
+    attack_id: str | None,
+) -> Mapping[str, Any]:
+    if attack_id is None:
+        return config
+    attack_methods = create_attack_method_registry()
+    return materialize_config_for_attack_id(
+        config,
+        attack_id,
+        registry=attack_methods,
+    )
