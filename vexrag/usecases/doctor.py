@@ -43,7 +43,7 @@ def run_doctor(
     return DoctorResult(checks=tuple(results))
 
 
-def _run_check(name: str, check: Callable[[], None]) -> DoctorCheckResult:
+def _run_check(name: str, check: Callable[[], object]) -> DoctorCheckResult:
     try:
         check()
     except (

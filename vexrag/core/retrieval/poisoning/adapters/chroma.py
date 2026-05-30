@@ -92,9 +92,9 @@ class ChromaPoisoner:
         try:
             self._collection.add(
                 ids=ids,
-                embeddings=vectors,
+                embeddings=vectors,  # type: ignore[arg-type]  # chromadb stubs vs list[list[float]]
                 documents=stripped,
-                metadatas=metadatas,
+                metadatas=metadatas,  # type: ignore[arg-type]  # chromadb Metadata typing
             )
         except Exception as exc:
             for pid in ids:

@@ -1,6 +1,6 @@
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from vexrag.attack_algorithms.hijackrag.case_generator import (
     AutomaticHijackRAGCaseGenerator,
@@ -22,6 +22,7 @@ from vexrag.attack_algorithms.poison_base.plugin_helpers import (
     build_attack_llm_client,
     load_attack_case_configs,
 )
+from vexrag.core.attack_configurator import TargetStyle
 from vexrag.core.attack_configurator.types import GenerateCasesParams
 from vexrag.core.base_configuration import ConfigAccessor
 from vexrag.core.scan.builder import (
@@ -166,7 +167,7 @@ def _build_hijackrag_request(
         case_id=case_config_accessor.get_optional_string(
             "case_id", case_config_accessor.get_optional_string("id")
         ),
-        adv_per_query=case_config_accessor.get_optional_int(
+        adv_per_query=case_config_accessor.get_int(
             "adv_per_query", HIJACKRAG_SCAN_PROFILE.default_adv_per_query
         ),
         segment_ids=_hijack_segment_ids_from_case(case_config, prefix),
@@ -231,7 +232,7 @@ def _generate_cases(
         generator.generate_cases(
             count=params.count,
             topic=params.topic,
-            correct_answer_style=params.target_style,
+            correct_answer_style=cast(TargetStyle, params.target_style),
             adv_per_query=params.adv_per_query,
             seed=params.seed,
         )

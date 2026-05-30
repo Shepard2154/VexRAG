@@ -2,7 +2,6 @@ from collections.abc import Iterable
 from typing import Protocol, TypeVar
 
 RequestT = TypeVar("RequestT", bound="CorpusPoisonRequest")
-ResultT = TypeVar("ResultT", bound="CorpusPoisonGenerationResult")
 
 
 class CorpusPoisonRequest(Protocol):
@@ -21,9 +20,11 @@ class CorpusPoisonGenerationResult(Protocol):
     meta: CorpusPoisonGenerationMeta
 
 
-class CorpusPoisonGenerator(Protocol[RequestT]):
-    def generate_one(self, request: RequestT) -> CorpusPoisonGenerationResult: ...
+class CorpusPoisonGenerator(Protocol):
+    def generate_one(
+        self, request: CorpusPoisonRequest
+    ) -> CorpusPoisonGenerationResult: ...
 
     def generate_many(
-        self, requests: Iterable[RequestT]
+        self, requests: Iterable[CorpusPoisonRequest]
     ) -> list[CorpusPoisonGenerationResult]: ...

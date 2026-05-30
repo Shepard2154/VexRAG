@@ -20,6 +20,10 @@ def parse_judge_llm_response(payload: str | Mapping[str, Any]) -> JudgeDetails:
         raise JudgeResponseValidationError("Field 'reason' must be a non-empty string.")
 
     judge_answer_label = data.get("judge_answer_label")
+    if not isinstance(judge_answer_label, str):
+        raise JudgeResponseValidationError(
+            "Field 'judge_answer_label' must be a string."
+        )
     try:
         label = JudgeAnswerLabel(judge_answer_label)
     except ValueError:

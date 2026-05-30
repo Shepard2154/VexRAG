@@ -17,7 +17,7 @@ from vexrag.attack_algorithms.poisonedrag.validation import (
     normalize_adv_texts,
     validate_poison_payload,
 )
-from vexrag.core.attack_configurator import CorrectAnswerProvider
+from vexrag.core.attack_configurator import CorrectAnswerProvider, CorrectAnswerSource
 from vexrag.core.llm import JsonCompletionClient, validate_correct_answer_payload
 
 
@@ -67,7 +67,7 @@ class PoisonedRAGGenerator:
         self,
         request: PoisonedRAGRequest,
         warnings: list[str],
-    ) -> tuple[str, str]:
+    ) -> tuple[str, CorrectAnswerSource]:
         return resolve_correct_answer(
             query=request.query,
             provided_answer=request.correct_answer,

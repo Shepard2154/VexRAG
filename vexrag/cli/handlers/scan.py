@@ -1,6 +1,7 @@
 import argparse
 import logging
 from collections.abc import Mapping
+from typing import Any
 
 from vexrag.cli.logging_setup import configure_logging
 from vexrag.cli.presentation.output_mode import OutputMode, resolve_output_mode
@@ -90,7 +91,7 @@ def run(args: argparse.Namespace) -> int:
     return 0
 
 
-def log_config_summary(config: Mapping) -> None:
+def log_config_summary(config: Mapping[str, Any]) -> None:
     target_http = _target_http_config(config)
     if target_http:
         base_url = target_http.get("base_url", "")
@@ -115,7 +116,7 @@ def log_config_summary(config: Mapping) -> None:
         LOGGER.info("Evaluation: %s", strategy)
 
 
-def _target_http_config(config: Mapping) -> Mapping | None:
+def _target_http_config(config: Mapping[str, Any]) -> Mapping[str, Any] | None:
     target = config.get("target_system")
     if not isinstance(target, Mapping):
         return None

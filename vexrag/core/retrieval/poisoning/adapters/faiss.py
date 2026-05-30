@@ -136,9 +136,8 @@ def _persist_faiss_corpus(
         with index_tmp.open("rb") as fh:
             os.fsync(fh.fileno())
 
-        with metadata_tmp.open("w", encoding="utf-8") as fh:
-            fh.write(metadata_payload)
-            fh.flush()
+        metadata_tmp.write_text(metadata_payload, encoding="utf-8")
+        with metadata_tmp.open("rb") as fh:
             os.fsync(fh.fileno())
 
         shutil.copy2(index_path, index_backup)
@@ -205,7 +204,7 @@ class FaissPoisoner:
         poison_id_start: int = -1,
     ) -> None:
         try:
-            import faiss  # type: ignore[import-untyped]
+            import faiss
             import numpy as np
         except ImportError as exc:
             raise CorpusPoisoningError(

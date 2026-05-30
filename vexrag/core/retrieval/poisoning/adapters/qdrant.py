@@ -82,16 +82,20 @@ class QdrantPoisoner:
         self._owned_ids: set[str] = set()
         self._embedding_client = embedding_client
         self._l2_normalize = l2_normalize
+        qdrant_timeout = int(timeout) if timeout is not None else None
 
         if url:
             self._client = QdrantClient(
                 url=url.strip(),
-                timeout=timeout,
+                timeout=qdrant_timeout,
                 api_key=api_key,
             )
         else:
             assert path is not None
-            self._client = QdrantClient(path=str(path.resolve()), timeout=timeout)
+            self._client = QdrantClient(
+                path=str(path.resolve()),
+                timeout=qdrant_timeout,
+            )
 
     def add_texts(
         self,

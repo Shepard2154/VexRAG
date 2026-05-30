@@ -1,6 +1,6 @@
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from vexrag.attack_algorithms.poison_base.case_id import stable_generated_case_id
 from vexrag.attack_algorithms.poison_base.plugin_factory import (
@@ -21,6 +21,7 @@ from vexrag.attack_algorithms.poisonedrag.scan_profile import (
     POISONEDRAG_SCAN_PROFILE,
 )
 from vexrag.attack_algorithms.poisonedrag.schema import PoisonedRAGRequest
+from vexrag.core.attack_configurator import TargetStyle
 from vexrag.core.attack_configurator.types import GenerateCasesParams
 from vexrag.core.base_configuration import ConfigAccessor
 from vexrag.core.scan.builder import (
@@ -114,7 +115,7 @@ def _build_poisonedrag_request(
         case_id=case_config_accessor.get_optional_string(
             "case_id", case_config_accessor.get_optional_string("id")
         ),
-        adv_per_query=case_config_accessor.get_optional_int(
+        adv_per_query=case_config_accessor.get_int(
             "adv_per_query", POISONEDRAG_SCAN_PROFILE.default_adv_per_query
         ),
         target_style=target_style_option(
@@ -178,7 +179,7 @@ def _generate_cases(
         generator.generate_cases(
             count=params.count,
             topic=params.topic,
-            target_style=params.target_style,
+            target_style=cast(TargetStyle, params.target_style),
             adv_per_query=params.adv_per_query,
             seed=params.seed,
         )

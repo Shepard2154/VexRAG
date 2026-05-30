@@ -20,6 +20,7 @@ from vexrag.core.scan.builder import (
     build_target_system,
 )
 from vexrag.core.scan.builder.registries import ScanRegistries
+from vexrag.core.scan.config.errors import ScanConfigError
 from vexrag.core.scan.execution import ConfiguredScanCommand
 from vexrag.core.target_systems import HTTPTargetSystemAdapter
 
@@ -61,6 +62,10 @@ def build_corpus_poison_scan_command(
         config,
         registry=registries.target_systems,
     )
+    if not isinstance(target_system, HTTPTargetSystemAdapter):
+        raise ScanConfigError(
+            f"{spec.attack_id} requires target_system.http configuration"
+        )
     generator = spec.build_generator(
         config,
         target_system,

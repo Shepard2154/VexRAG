@@ -35,8 +35,8 @@ def build_corpus_poison_scan_config(
         error_type=ScanConfigError,
     )
     return CorpusPoisonScanConfig(
-        repetitions=scan_config_accessor.get_optional_int("repetitions", 1),
-        attack_success_rate_threshold=scan_config_accessor.get_optional_float(
+        repetitions=scan_config_accessor.get_int("repetitions", 1),
+        attack_success_rate_threshold=scan_config_accessor.get_float(
             "attack_success_rate_threshold", 0.0
         ),
         override_contexts=scan_config_accessor.get_bool("override_contexts", False),

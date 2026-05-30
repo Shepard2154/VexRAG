@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Any
 
 from vexrag.core.base_configuration import ConfigAccessor
+from vexrag.core.llm.contracts import EmbeddingClient
 from vexrag.core.llm.providers.registry import LLMProviderRegistry
 from vexrag.core.retrieval import (
     ChromaPoisoner,
@@ -187,7 +188,7 @@ def _optional_poison_timeout(
 def _build_qdrant_corpus_poisoner(
     backend_cfg: Mapping[str, Any],
     *,
-    embedding_client,
+    embedding_client: EmbeddingClient,
     l2_normalize: bool,
     base_dir: Path | None,
 ) -> QdrantPoisoner:
@@ -219,14 +220,14 @@ def _build_qdrant_corpus_poisoner(
 def _build_chroma_corpus_poisoner(
     backend_cfg: Mapping[str, Any],
     *,
-    embedding_client,
+    embedding_client: EmbeddingClient,
     l2_normalize: bool,
     base_dir: Path | None,
 ) -> ChromaPoisoner:
     prefix = "scan.corpus_poisoning.chroma"
     accessor = ConfigAccessor(backend_cfg, prefix=prefix, error_type=ScanConfigError)
     host = accessor.get_optional_string("host")
-    port = accessor.get_optional_int("port", 8000)
+    port = accessor.get_int("port", 8000)
     path_str = backend_cfg.get("persist_directory") or backend_cfg.get("path")
     persist_directory: Path | None = None
     if host:
@@ -255,7 +256,7 @@ def _build_chroma_corpus_poisoner(
 def _build_faiss_corpus_poisoner(
     backend_cfg: Mapping[str, Any],
     *,
-    embedding_client,
+    embedding_client: EmbeddingClient,
     l2_normalize: bool,
     base_dir: Path | None,
 ) -> FaissPoisoner:

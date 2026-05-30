@@ -14,7 +14,7 @@ from vexrag.attack_algorithms.hijackrag.segments import (
     load_hijack_segments,
 )
 from vexrag.attack_algorithms.poison_base.correct_answer import resolve_correct_answer
-from vexrag.core.attack_configurator import CorrectAnswerProvider
+from vexrag.core.attack_configurator import CorrectAnswerProvider, CorrectAnswerSource
 from vexrag.core.llm import JsonCompletionClient, validate_correct_answer_payload
 
 PROMPT_VERSION = "hijackrag-segments-v1"
@@ -88,7 +88,7 @@ class HijackRAGGenerator:
         self,
         request: HijackRAGRequest,
         warnings: list[str],
-    ) -> tuple[str, str]:
+    ) -> tuple[str, CorrectAnswerSource]:
         return resolve_correct_answer(
             query=request.query,
             provided_answer=request.correct_answer,

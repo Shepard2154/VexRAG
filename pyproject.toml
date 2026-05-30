@@ -50,6 +50,7 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.8.0",
     "mypy>=2.0.0",
+    "types-PyYAML",
 ]
 
 [tool.pytest.ini_options]
@@ -86,14 +87,35 @@ include = ["vexrag*"]
     "segment_templates/*.json",
 ]
 
+[tool.mypy]
+files = ["vexrag"]
+strict = true
+python_version = "3.11"
+strict_bytes = true
+local_partial_types = true
+ignore_missing_imports = true
+
+# from https://blog.wolt.com/engineering/2021/09/30/professional-grade-mypy-configuration/
+disallow_untyped_defs = true
+no_implicit_optional = true
+check_untyped_defs = true
+warn_return_any = true
+show_error_codes = true
+warn_unused_ignores = true
+
+disallow_incomplete_defs = true
+disallow_untyped_decorators = true
+disallow_any_unimported = false
+
 [tool.poe.tasks]
 lint = "ruff check ."
 format = "ruff format ."
 lint-vexrag = "ruff check vexrag/"
+typecheck = "mypy"
 
 [tool.poe.tasks.check]
 help = "Run ruff check and verify formatting (no writes)"
-shell = "ruff check . && ruff format --check ."
+shell = "ruff check . && ruff format --check . && mypy"
 
 [tool.poe.tasks.fix]
 help = "Auto-fix ruff issues and format the tree"
