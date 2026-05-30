@@ -5,7 +5,12 @@ def print_doctor_result(result: DoctorResult) -> None:
     print("VexRAG Doctor")
     print()
     for check in result.checks:
-        icon = "OK" if check.ok else "FAIL"
+        if check.skipped:
+            icon = "SKIP"
+        elif check.ok:
+            icon = "OK"
+        else:
+            icon = "FAIL"
         print(f"[{icon}] {check.name}")
         if check.error:
             print(f"  -> {check.error}")

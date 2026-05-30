@@ -1,26 +1,28 @@
 import json
 import os
+import sys
 from collections.abc import Mapping
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import requests
 import uvicorn
-from datasets import load_dataset
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qmodels
 from sentence_transformers import SentenceTransformer
 
+_MEDIUM_DIR = Path(__file__).resolve().parents[1]
+if str(_MEDIUM_DIR) not in sys.path:
+    sys.path.insert(0, str(_MEDIUM_DIR))
 
-@dataclass(frozen=True)
-class BenchmarkExample:
-    sample_id: int
-    question: str
-    answer: str
-    context: str
+from common.nq_loading import (  # noqa: E402
+    BenchmarkExample,
+    corpus_fingerprint,
+    load_examples,
+    load_nq_examples,
+)
 
 
 class LLMClient:
@@ -85,12 +87,15 @@ class NQRAG:
         extra_contexts_dir: Path | None = None,
     ) -> None:
         self._base_examples = list(examples)
+        self._extra_examples: list[BenchmarkExample] = []
         self.extra_contexts_dir = extra_contexts_dir
         self._extra_context_files: tuple[Path, ...] = ()
         self.llm_client = llm_client
         self._qdrant_dir = qdrant_dir
         self._qdrant_dir.mkdir(parents=True, exist_ok=True)
         self._collection_name = collection_name
+        self._metadata_path = self._qdrant_dir / "index_metadata.json"
+        self._embedding_model_name = embedding_model
         self._qdrant = QdrantClient(path=str(self._qdrant_dir))
         self._embedding_model = SentenceTransformer(
             embedding_model,
@@ -98,32 +103,66 @@ class NQRAG:
         )
         self.examples: list[BenchmarkExample] = []
         self._example_by_id: dict[int, BenchmarkExample] = {}
-        self._set_examples(self._base_examples)
+        self._sync_qdrant_base()
 
-    def _set_examples(self, examples: list[BenchmarkExample]) -> None:
-        self.examples = examples
-        self._example_by_id = {example.sample_id: example for example in examples}
-        self._sync_qdrant_index()
+    def _base_fingerprint(self) -> str:
+        return corpus_fingerprint(self._base_examples)
 
-    def _sync_qdrant_index(self) -> None:
-        if not self.examples:
-            if self._qdrant.collection_exists(self._collection_name):
-                self._qdrant.delete_collection(self._collection_name)
-            return
-        documents = [example.context for example in self.examples]
-        embeddings = self._embedding_model.encode(
-            documents,
+    def _refresh_example_maps(self) -> None:
+        self.examples = [*self._base_examples, *self._extra_examples]
+        self._example_by_id = {example.sample_id: example for example in self.examples}
+
+    def _read_index_metadata(self) -> dict[str, Any]:
+        if not self._metadata_path.exists():
+            return {}
+        try:
+            payload = json.loads(self._metadata_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+        return payload if isinstance(payload, dict) else {}
+
+    def _write_index_metadata(self, **fields: Any) -> None:
+        metadata = self._read_index_metadata()
+        metadata.update(fields)
+        self._metadata_path.write_text(
+            json.dumps(metadata, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+    def _encode_contexts(self, contexts: list[str]):
+        return self._embedding_model.encode(
+            contexts,
             convert_to_numpy=True,
             normalize_embeddings=True,
         ).astype("float32")
+
+    def _base_index_matches(self) -> bool:
+        if not self._qdrant.collection_exists(self._collection_name):
+            return False
+        metadata = self._read_index_metadata()
+        if metadata.get("base_fingerprint") != self._base_fingerprint():
+            return False
+        if metadata.get("embedding_model") != self._embedding_model_name:
+            return False
+        if metadata.get("base_count") != len(self._base_examples):
+            return False
+        collection = self._qdrant.get_collection(self._collection_name)
+        return int(collection.points_count) >= len(self._base_examples)
+
+    def _upsert_examples(self, examples: list[BenchmarkExample]) -> None:
+        if not examples:
+            return
+        documents = [example.context for example in examples]
+        embeddings = self._encode_contexts(documents)
         vector_size = int(embeddings.shape[1])
-        self._qdrant.recreate_collection(
-            collection_name=self._collection_name,
-            vectors_config=qmodels.VectorParams(
-                size=vector_size,
-                distance=qmodels.Distance.COSINE,
-            ),
-        )
+        if not self._qdrant.collection_exists(self._collection_name):
+            self._qdrant.create_collection(
+                collection_name=self._collection_name,
+                vectors_config=qmodels.VectorParams(
+                    size=vector_size,
+                    distance=qmodels.Distance.COSINE,
+                ),
+            )
         points = [
             qmodels.PointStruct(
                 id=int(example.sample_id),
@@ -135,12 +174,66 @@ class NQRAG:
                     "context": example.context,
                 },
             )
-            for example, embedding in zip(self.examples, embeddings, strict=True)
+            for example, embedding in zip(examples, embeddings, strict=True)
         ]
         self._qdrant.upsert(
             collection_name=self._collection_name,
             points=points,
         )
+
+    def _sync_qdrant_base(self) -> None:
+        if self._base_index_matches():
+            self._refresh_example_maps()
+            return
+
+        if self._qdrant.collection_exists(self._collection_name):
+            self._qdrant.delete_collection(self._collection_name)
+
+        if not self._base_examples:
+            self._write_index_metadata(
+                base_fingerprint=self._base_fingerprint(),
+                embedding_model=self._embedding_model_name,
+                base_count=0,
+                corpus_fingerprint=self._base_fingerprint(),
+            )
+            self._refresh_example_maps()
+            return
+
+        self._upsert_examples(self._base_examples)
+        self._write_index_metadata(
+            base_fingerprint=self._base_fingerprint(),
+            embedding_model=self._embedding_model_name,
+            base_count=len(self._base_examples),
+            corpus_fingerprint=corpus_fingerprint(self._base_examples),
+        )
+        self._refresh_example_maps()
+
+    def _sync_qdrant_extras(self) -> None:
+        if not self._qdrant.collection_exists(self._collection_name):
+            self._sync_qdrant_base()
+
+        if self._qdrant.collection_exists(self._collection_name):
+            self._qdrant.delete(
+                collection_name=self._collection_name,
+                points_selector=qmodels.Filter(
+                    must=[
+                        qmodels.FieldCondition(
+                            key="sample_id",
+                            range=qmodels.Range(lt=0),
+                        )
+                    ]
+                ),
+            )
+
+        if self._extra_examples:
+            self._upsert_examples(self._extra_examples)
+
+        self._write_index_metadata(
+            corpus_fingerprint=corpus_fingerprint(
+                [*self._base_examples, *self._extra_examples]
+            )
+        )
+        self._refresh_example_maps()
 
     def retrieve(
         self, query: str, top_k: int = 2
@@ -148,11 +241,7 @@ class NQRAG:
         self._reload_extra_contexts()
         if not self.examples:
             return []
-        query_embedding = self._embedding_model.encode(
-            [query],
-            convert_to_numpy=True,
-            normalize_embeddings=True,
-        ).astype("float32")
+        query_embedding = self._encode_contexts([query])
         n_results = min(top_k, len(self.examples))
         if hasattr(self._qdrant, "search"):
             hits = self._qdrant.search(
@@ -232,131 +321,13 @@ class NQRAG:
             )
 
         self._extra_context_files = context_files
-        self._set_examples([*self._base_examples, *extra_examples])
+        self._extra_examples = extra_examples
+        self._sync_qdrant_extras()
 
 
 class RAGRequest(BaseModel):
     query: str
     contexts: list[str] | None = None
-
-
-def load_examples(path: Path) -> list[BenchmarkExample]:
-    examples: list[BenchmarkExample] = []
-    with path.open(encoding="utf-8") as file:
-        for line in file:
-            if not line.strip():
-                continue
-            row = json.loads(line)
-            sample_id = int(row["id"])
-            context = str(row.get("context", "")).strip()
-            if not context:
-                continue
-            examples.append(
-                BenchmarkExample(
-                    sample_id=sample_id,
-                    question=row["question"],
-                    answer=row["answer"],
-                    context=context,
-                )
-            )
-    return examples
-
-
-def load_nq_examples(config: Mapping[str, Any]) -> list[BenchmarkExample]:
-    dataset_name = str(config.get("name", "natural_questions")).strip()
-    split = str(config.get("split", "train")).strip()
-    try:
-        limit = int(config.get("limit", 2000))
-    except (TypeError, ValueError) as exc:
-        raise RuntimeError("nq_dataset.limit must be an integer") from exc
-    if limit <= 0:
-        raise RuntimeError("nq_dataset.limit must be greater than 0")
-    cache_dir_raw = config.get("cache_dir")
-    cache_dir = str(cache_dir_raw).strip() if isinstance(cache_dir_raw, str) else None
-
-    dataset = load_dataset(
-        dataset_name,
-        split=split,
-        streaming=True,
-        cache_dir=cache_dir or None,
-    )
-    examples: list[BenchmarkExample] = []
-    for index, row in enumerate(dataset, start=1):
-        question = _extract_question(row)
-        context = _extract_context(row)
-        answer = _extract_answer(row)
-        if not question or not context:
-            continue
-        examples.append(
-            BenchmarkExample(
-                sample_id=index,
-                question=question,
-                answer=answer,
-                context=context,
-            )
-        )
-        if len(examples) >= limit:
-            break
-    if not examples:
-        raise RuntimeError("could not load NQ examples with question+context")
-    return examples
-
-
-def _extract_question(row: Mapping[str, Any]) -> str:
-    question = row.get("question")
-    if isinstance(question, str):
-        return question.strip()
-    if isinstance(question, Mapping):
-        text = question.get("text")
-        if isinstance(text, str):
-            return text.strip()
-    return ""
-
-
-def _extract_context(row: Mapping[str, Any]) -> str:
-    for key in ("context", "document_text", "passage", "text"):
-        value = row.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-
-    document = row.get("document")
-    if isinstance(document, Mapping):
-        for key in ("text", "document_text", "html"):
-            value = document.get(key)
-            if isinstance(value, str) and value.strip():
-                return value.strip()
-        tokens = document.get("tokens")
-        if isinstance(tokens, Mapping):
-            token_values = tokens.get("token")
-            if isinstance(token_values, list):
-                joined = " ".join(
-                    str(token).strip() for token in token_values if str(token).strip()
-                )
-                if joined:
-                    return joined
-    return ""
-
-
-def _extract_answer(row: Mapping[str, Any]) -> str:
-    answer = row.get("answer")
-    if isinstance(answer, str):
-        return answer.strip()
-    if isinstance(answer, list):
-        for item in answer:
-            if isinstance(item, str) and item.strip():
-                return item.strip()
-    annotations = row.get("annotations")
-    if isinstance(annotations, Mapping):
-        short_answers = annotations.get("short_answers")
-        if isinstance(short_answers, list):
-            for item in short_answers:
-                if isinstance(item, str) and item.strip():
-                    return item.strip()
-                if isinstance(item, Mapping):
-                    text = item.get("text")
-                    if isinstance(text, str) and text.strip():
-                        return text.strip()
-    return ""
 
 
 def create_app(rag: NQRAG, top_k: int) -> FastAPI:

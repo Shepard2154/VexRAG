@@ -4,12 +4,15 @@ from typing import Any
 from vexrag.core.scan.config.errors import ScanConfigError
 from vexrag.usecases.errors import UseCaseConfigError, UseCaseDependencyError
 from vexrag.usecases.preflight import (
+    collect_vllm_models,
     preflight_ollama_models,
     preflight_target_system,
     preflight_vllm_models,
 )
 from vexrag.usecases.scan_service import build_scan_command
 from vexrag.usecases.types import DoctorCheckResult, DoctorResult
+
+_VLLM_CHECK_NAME = "vLLM endpoint + required models"
 
 
 def run_doctor(
@@ -21,11 +24,14 @@ def run_doctor(
     config_label = (
         "scan config validity + LLM probe" if check_llms else "scan config validity"
     )
-    checks: list[tuple[str, Callable[[], None]]] = [
-        ("target API availability", lambda: preflight_target_system(config)),
-        ("Ollama endpoint + required models", lambda: preflight_ollama_models(config)),
-        ("vLLM endpoint + required models", lambda: preflight_vllm_models(config)),
-        (
+    results = [
+        _run_check("target API availability", lambda: preflight_target_system(config)),
+        _run_check(
+            "Ollama endpoint + required models",
+            lambda: preflight_ollama_models(config),
+        ),
+        _check_vllm(config),
+        _run_check(
             config_label,
             lambda: build_scan_command(
                 config,
@@ -34,20 +40,26 @@ def run_doctor(
             ),
         ),
     ]
-
-    results: list[DoctorCheckResult] = []
-    for name, check in checks:
-        try:
-            check()
-        except (
-            ScanConfigError,
-            UseCaseConfigError,
-            UseCaseDependencyError,
-            ValueError,
-            RuntimeError,
-        ) as exc:
-            results.append(DoctorCheckResult(name=name, ok=False, error=str(exc)))
-        else:
-            results.append(DoctorCheckResult(name=name, ok=True, error=None))
-
     return DoctorResult(checks=tuple(results))
+
+
+def _run_check(name: str, check: Callable[[], None]) -> DoctorCheckResult:
+    try:
+        check()
+    except (
+        ScanConfigError,
+        UseCaseConfigError,
+        UseCaseDependencyError,
+        ValueError,
+        RuntimeError,
+    ) as exc:
+        return DoctorCheckResult(name=name, ok=False, error=str(exc))
+    return DoctorCheckResult(name=name, ok=True, error=None)
+
+
+def _check_vllm(config: Mapping[str, Any]) -> DoctorCheckResult:
+    if not collect_vllm_models(config):
+        return DoctorCheckResult(
+            name=_VLLM_CHECK_NAME, ok=True, error=None, skipped=True
+        )
+    return _run_check(_VLLM_CHECK_NAME, lambda: preflight_vllm_models(config))

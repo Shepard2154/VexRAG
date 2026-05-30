@@ -12,7 +12,7 @@ Most RAG security tools focus on jailbreaking or prompt injection. VexRAG is dif
 > **Stability notice (pre-0.2.0):** VexRAG is currently test-stage software and is **not production-ready**.
 > Until version `0.2.0`, backward compatibility is **not guaranteed** and updates may include **breaking changes**.
 
-**Sample RAG stacks** for getting started: [RAG examples](RAG%20examples/README.md).
+**Sample RAG stacks** for getting started: [rag_examples](rag_examples/README.md).
 
 ## Quickstart
 
@@ -58,11 +58,11 @@ vx --help
 vx scan --config path/to/scan.yml
 ```
 
-Use sample configs from `RAG examples/` as a starting point.
+Use sample configs from `rag_examples/` as a starting point.
 
 ### 4) First successful scan (small local example)
 
-From `RAG examples/small/rag_01_in_memory_en`:
+From `rag_examples/small/rag_01_in_memory_en`:
 
 ```bash
 python3 -m venv .venv
@@ -75,6 +75,26 @@ vx scan --config scan_configs_examples/ollama-smoke.yaml
 Expected outcome:
 - `small_rag.py` serves the target API on `http://localhost:8080`.
 - `vx scan` completes and prints a scan report with attack/evaluation results (no connection/preflight errors).
+
+## Development setup
+
+From the repository root:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+pre-commit install   # optional
+```
+
+Run quality checks:
+
+```bash
+ruff check .
+ruff format --check .
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for commit and workflow notes.
 
 ## Project roadmap
 
@@ -93,4 +113,3 @@ Expected outcome:
 - [ ] Expand red-team methods in VexRAG
 - [ ] Expand supported retrieval backends
 - [ ] Implement a web version of VexRAG
-

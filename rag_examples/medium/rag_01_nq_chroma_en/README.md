@@ -7,7 +7,7 @@ Base retrieval contexts are loaded from NQ and stored directly in Chroma, not fr
 
 ## Quick start
 
-From `RAG examples/medium/rag_01_nq_chroma_en`:
+From `rag_examples/medium/rag_01_nq_chroma_en`:
 
 ```bash
 python3 -m venv .venv
@@ -21,6 +21,20 @@ Poison payload files are written into `poisoned_contexts/` and then indexed into
 
 Default service URL: `http://localhost:8080`  
 Endpoint: `POST /model/context-based-response` — JSON body `{"query": "..."}`; response includes `answer` and `contexts`.
+
+## Smoke vs full mode
+
+| Mode | Config | Corpus source | Typical use |
+|------|--------|---------------|-------------|
+| **Full** | `config.json` (default) | Hugging Face NQ (`google-research-datasets/natural_questions`, 2000 passages) | Realistic index size, first run downloads NQ |
+| **Smoke** | `RAG_CONFIG=config.smoke.json` | Local `benchmark.jsonl` (10 passages with embedded answers) | Fast startup for scans and attack demos |
+
+Smoke mode sets `nq_dataset.enabled: false` so the service skips HF download and uses `benchmark.jsonl` instead.
+Both modes reuse the Chroma index when the corpus fingerprint and embedding model match stored metadata.
+
+```bash
+RAG_CONFIG=config.smoke.json python3 nq_rag.py
+```
 
 ## Docker
 
@@ -53,7 +67,5 @@ With the service running:
 ```bash
 vx scan --config scan_configs_examples/ollama-smoke.yaml
 ```
-
-Faster target startup: `RAG_CONFIG=config.smoke.json python3 nq_rag.py`
 
 See `scan_configs_examples/README.md`.

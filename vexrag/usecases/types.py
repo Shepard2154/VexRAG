@@ -7,6 +7,7 @@ class DoctorCheckResult:
     name: str
     ok: bool
     error: str | None
+    skipped: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -15,7 +16,7 @@ class DoctorResult:
 
     @property
     def failed_count(self) -> int:
-        return sum(1 for check in self.checks if not check.ok)
+        return sum(1 for check in self.checks if not check.ok and not check.skipped)
 
     @property
     def passed(self) -> bool:

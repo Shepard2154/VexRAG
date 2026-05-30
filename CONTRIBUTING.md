@@ -2,11 +2,15 @@
 
 ## Development Setup
 
+From the repository root:
+
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 ```
+
+See the [Development setup](README.md#development-setup) section in the root README for a quick overview.
 
 ## Code Quality
 

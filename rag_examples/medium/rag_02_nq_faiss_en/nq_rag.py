@@ -1,25 +1,28 @@
 import json
 import os
+import sys
 from collections.abc import Mapping
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import faiss
+import numpy as np
 import requests
 import uvicorn
-from datasets import load_dataset
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
 
+_MEDIUM_DIR = Path(__file__).resolve().parents[1]
+if str(_MEDIUM_DIR) not in sys.path:
+    sys.path.insert(0, str(_MEDIUM_DIR))
 
-@dataclass(frozen=True)
-class BenchmarkExample:
-    sample_id: int
-    question: str
-    answer: str
-    context: str
+from common.nq_loading import (  # noqa: E402
+    BenchmarkExample,
+    corpus_fingerprint,
+    load_examples,
+    load_nq_examples,
+)
 
 
 class LLMClient:
@@ -83,6 +86,7 @@ class NQRAG:
         extra_contexts_dir: Path | None = None,
     ) -> None:
         self._base_examples = list(examples)
+        self._extra_examples: list[BenchmarkExample] = []
         self.extra_contexts_dir = extra_contexts_dir
         self._extra_context_files: tuple[Path, ...] = ()
         self.llm_client = llm_client
@@ -90,36 +94,86 @@ class NQRAG:
         self._faiss_dir.mkdir(parents=True, exist_ok=True)
         self._faiss_index_path = self._faiss_dir / "index.faiss"
         self._metadata_path = self._faiss_dir / "metadata.json"
+        self._base_embeddings_path = self._faiss_dir / "base_embeddings.npy"
+        self._embedding_model_name = embedding_model
         self._embedding_model = SentenceTransformer(
             embedding_model,
             device=embedding_device,
         )
+        self._base_embeddings: np.ndarray | None = None
         self._index: faiss.IndexFlatIP | None = None
         self._ordered_ids: list[int] = []
         self.examples: list[BenchmarkExample] = []
         self._example_by_id: dict[int, BenchmarkExample] = {}
-        self._set_examples(self._base_examples)
-
-    def _set_examples(self, examples: list[BenchmarkExample]) -> None:
-        self.examples = examples
-        self._example_by_id = {example.sample_id: example for example in examples}
         self._sync_faiss_index()
 
-    def _sync_faiss_index(self) -> None:
-        if not self.examples:
-            self._ordered_ids = []
-            self._index = None
-            return
-        self._ordered_ids = [example.sample_id for example in self.examples]
-        documents = [example.context for example in self.examples]
-        embeddings = self._embedding_model.encode(
-            documents,
+    def _base_fingerprint(self) -> str:
+        return corpus_fingerprint(self._base_examples)
+
+    def _refresh_example_maps(self) -> None:
+        self.examples = [*self._base_examples, *self._extra_examples]
+        self._example_by_id = {example.sample_id: example for example in self.examples}
+
+    def _encode_contexts(self, contexts: list[str]) -> np.ndarray:
+        return self._embedding_model.encode(
+            contexts,
             convert_to_numpy=True,
             normalize_embeddings=True,
         ).astype("float32")
-        self._index = faiss.IndexFlatIP(embeddings.shape[1])
-        self._index.add(embeddings)
-        self._persist_faiss_index()
+
+    def _try_load_existing_index(self) -> bool:
+        if not self._faiss_index_path.exists() or not self._metadata_path.exists():
+            return False
+        try:
+            metadata = json.loads(self._metadata_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return False
+        expected_fingerprint = corpus_fingerprint(
+            [*self._base_examples, *self._extra_examples]
+        )
+        if metadata.get("corpus_fingerprint") != expected_fingerprint:
+            return False
+        if metadata.get("embedding_model") != self._embedding_model_name:
+            return False
+        ordered_ids = metadata.get("ordered_ids")
+        if not isinstance(ordered_ids, list):
+            return False
+        self._index = faiss.read_index(str(self._faiss_index_path))
+        self._ordered_ids = [int(item) for item in ordered_ids]
+        self._refresh_example_maps()
+        return True
+
+    def _try_load_base_embeddings(self) -> bool:
+        if not self._base_embeddings_path.exists() or not self._metadata_path.exists():
+            return False
+        try:
+            metadata = json.loads(self._metadata_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return False
+        if metadata.get("base_fingerprint") != self._base_fingerprint():
+            return False
+        if metadata.get("embedding_model") != self._embedding_model_name:
+            return False
+        if metadata.get("base_count") != len(self._base_examples):
+            return False
+        try:
+            self._base_embeddings = np.load(self._base_embeddings_path)
+        except OSError:
+            return False
+        return True
+
+    def _ensure_base_embeddings(self) -> np.ndarray:
+        if self._base_embeddings is not None:
+            return self._base_embeddings
+        if self._try_load_base_embeddings():
+            return self._base_embeddings  # type: ignore[return-value]
+        if not self._base_examples:
+            self._base_embeddings = np.empty((0, 0), dtype="float32")
+            return self._base_embeddings
+        documents = [example.context for example in self._base_examples]
+        self._base_embeddings = self._encode_contexts(documents)
+        np.save(self._base_embeddings_path, self._base_embeddings)
+        return self._base_embeddings
 
     def _persist_faiss_index(self) -> None:
         if self._index is None:
@@ -127,10 +181,50 @@ class NQRAG:
         faiss.write_index(self._index, str(self._faiss_index_path))
         self._metadata_path.write_text(
             json.dumps(
-                {"ordered_ids": self._ordered_ids}, ensure_ascii=False, indent=2
+                {
+                    "ordered_ids": self._ordered_ids,
+                    "embedding_model": self._embedding_model_name,
+                    "base_fingerprint": self._base_fingerprint(),
+                    "base_count": len(self._base_examples),
+                    "corpus_fingerprint": corpus_fingerprint(self.examples),
+                },
+                ensure_ascii=False,
+                indent=2,
             ),
             encoding="utf-8",
         )
+
+    def _sync_faiss_index(self) -> None:
+        if self._try_load_existing_index():
+            return
+
+        self._refresh_example_maps()
+        if not self.examples:
+            self._ordered_ids = []
+            self._index = None
+            return
+
+        base_embeddings = self._ensure_base_embeddings()
+        if self._extra_examples:
+            extra_embeddings = self._encode_contexts(
+                [example.context for example in self._extra_examples]
+            )
+            if base_embeddings.size:
+                embeddings = np.vstack([base_embeddings, extra_embeddings])
+            else:
+                embeddings = extra_embeddings
+        else:
+            embeddings = base_embeddings
+
+        if embeddings.size == 0:
+            self._ordered_ids = []
+            self._index = None
+            return
+
+        self._ordered_ids = [example.sample_id for example in self.examples]
+        self._index = faiss.IndexFlatIP(embeddings.shape[1])
+        self._index.add(embeddings)
+        self._persist_faiss_index()
 
     def retrieve(
         self, query: str, top_k: int = 2
@@ -138,11 +232,7 @@ class NQRAG:
         self._reload_extra_contexts()
         if not self.examples or self._index is None:
             return []
-        query_embedding = self._embedding_model.encode(
-            [query],
-            convert_to_numpy=True,
-            normalize_embeddings=True,
-        ).astype("float32")
+        query_embedding = self._encode_contexts([query])
         n_results = min(top_k, len(self._ordered_ids))
         scores, indices = self._index.search(query_embedding, n_results)
         out: list[tuple[BenchmarkExample, float]] = []
@@ -207,131 +297,13 @@ class NQRAG:
             )
 
         self._extra_context_files = context_files
-        self._set_examples([*self._base_examples, *extra_examples])
+        self._extra_examples = extra_examples
+        self._sync_faiss_index()
 
 
 class RAGRequest(BaseModel):
     query: str
     contexts: list[str] | None = None
-
-
-def load_examples(path: Path) -> list[BenchmarkExample]:
-    examples: list[BenchmarkExample] = []
-    with path.open(encoding="utf-8") as file:
-        for line in file:
-            if not line.strip():
-                continue
-            row = json.loads(line)
-            sample_id = int(row["id"])
-            context = str(row.get("context", "")).strip()
-            if not context:
-                continue
-            examples.append(
-                BenchmarkExample(
-                    sample_id=sample_id,
-                    question=row["question"],
-                    answer=row["answer"],
-                    context=context,
-                )
-            )
-    return examples
-
-
-def load_nq_examples(config: Mapping[str, Any]) -> list[BenchmarkExample]:
-    dataset_name = str(config.get("name", "natural_questions")).strip()
-    split = str(config.get("split", "train")).strip()
-    try:
-        limit = int(config.get("limit", 2000))
-    except (TypeError, ValueError) as exc:
-        raise RuntimeError("nq_dataset.limit must be an integer") from exc
-    if limit <= 0:
-        raise RuntimeError("nq_dataset.limit must be greater than 0")
-    cache_dir_raw = config.get("cache_dir")
-    cache_dir = str(cache_dir_raw).strip() if isinstance(cache_dir_raw, str) else None
-
-    dataset = load_dataset(
-        dataset_name,
-        split=split,
-        streaming=True,
-        cache_dir=cache_dir or None,
-    )
-    examples: list[BenchmarkExample] = []
-    for index, row in enumerate(dataset, start=1):
-        question = _extract_question(row)
-        context = _extract_context(row)
-        answer = _extract_answer(row)
-        if not question or not context:
-            continue
-        examples.append(
-            BenchmarkExample(
-                sample_id=index,
-                question=question,
-                answer=answer,
-                context=context,
-            )
-        )
-        if len(examples) >= limit:
-            break
-    if not examples:
-        raise RuntimeError("could not load NQ examples with question+context")
-    return examples
-
-
-def _extract_question(row: Mapping[str, Any]) -> str:
-    question = row.get("question")
-    if isinstance(question, str):
-        return question.strip()
-    if isinstance(question, Mapping):
-        text = question.get("text")
-        if isinstance(text, str):
-            return text.strip()
-    return ""
-
-
-def _extract_context(row: Mapping[str, Any]) -> str:
-    for key in ("context", "document_text", "passage", "text"):
-        value = row.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-
-    document = row.get("document")
-    if isinstance(document, Mapping):
-        for key in ("text", "document_text", "html"):
-            value = document.get(key)
-            if isinstance(value, str) and value.strip():
-                return value.strip()
-        tokens = document.get("tokens")
-        if isinstance(tokens, Mapping):
-            token_values = tokens.get("token")
-            if isinstance(token_values, list):
-                joined = " ".join(
-                    str(token).strip() for token in token_values if str(token).strip()
-                )
-                if joined:
-                    return joined
-    return ""
-
-
-def _extract_answer(row: Mapping[str, Any]) -> str:
-    answer = row.get("answer")
-    if isinstance(answer, str):
-        return answer.strip()
-    if isinstance(answer, list):
-        for item in answer:
-            if isinstance(item, str) and item.strip():
-                return item.strip()
-    annotations = row.get("annotations")
-    if isinstance(annotations, Mapping):
-        short_answers = annotations.get("short_answers")
-        if isinstance(short_answers, list):
-            for item in short_answers:
-                if isinstance(item, str) and item.strip():
-                    return item.strip()
-                if isinstance(item, Mapping):
-                    text = item.get("text")
-                    if isinstance(text, str) and text.strip():
-                        return text.strip()
-    return ""
 
 
 def create_app(rag: NQRAG, top_k: int) -> FastAPI:

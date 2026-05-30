@@ -21,7 +21,7 @@ ollama pull nomic-embed-text:latest
 
 ### First successful run
 
-From `RAG examples/small/rag_01_in_memory_en`:
+From `rag_examples/small/rag_01_in_memory_en`:
 
 ```bash
 python3 -m venv .venv

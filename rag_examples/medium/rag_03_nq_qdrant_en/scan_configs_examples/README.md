@@ -16,7 +16,7 @@ vx scan --config scan_configs_examples/ollama-smoke.yaml
 
 Poison files are written under `../poisoned_contexts/` and indexed on the next target request.
 
-**Faster target:** `RAG_CONFIG=config.smoke.json python3 nq_rag.py` (100 NQ passages instead of 2000).
+**Faster target:** `RAG_CONFIG=config.smoke.json python3 nq_rag.py` (local `benchmark.jsonl`, no HF download).
 
 ## Advanced
 

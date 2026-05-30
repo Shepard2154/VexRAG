@@ -1,25 +1,26 @@
 import json
 import os
+import sys
 from collections.abc import Mapping
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import chromadb
 import requests
 import uvicorn
 from chromadb.utils import embedding_functions
-from datasets import load_dataset
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
+_MEDIUM_DIR = Path(__file__).resolve().parents[1]
+if str(_MEDIUM_DIR) not in sys.path:
+    sys.path.insert(0, str(_MEDIUM_DIR))
 
-@dataclass(frozen=True)
-class BenchmarkExample:
-    sample_id: int
-    question: str
-    answer: str
-    context: str
+from common.nq_loading import (  # noqa: E402
+    BenchmarkExample,
+    corpus_fingerprint,
+    load_examples,
+    load_nq_examples,
+)
 
 
 class LLMClient:
@@ -81,9 +82,12 @@ class NQRAG:
         extra_contexts_dir: Path | None = None,
     ) -> None:
         self._base_examples = list(examples)
+        self._extra_examples: list[BenchmarkExample] = []
         self.extra_contexts_dir = extra_contexts_dir
         self._extra_context_files: tuple[Path, ...] = ()
         self.llm_client = llm_client
+        self._embedding_model_name = embedding_model
+        self._collection_name = collection_name
         self._client = chromadb.PersistentClient(path=str(chroma_dir))
         self._embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
             model_name=embedding_model
@@ -93,39 +97,110 @@ class NQRAG:
             embedding_function=self._embedding_fn,
             metadata={"hnsw:space": "cosine"},
         )
+        self._ensure_cosine_collection()
         self.examples: list[BenchmarkExample] = []
         self._example_by_id: dict[int, BenchmarkExample] = {}
-        self._set_examples(self._base_examples)
+        self._sync_chroma_base()
 
-    def _set_examples(self, examples: list[BenchmarkExample]) -> None:
-        self.examples = examples
-        self._example_by_id = {example.sample_id: example for example in examples}
-        self._sync_chroma_index()
+    def _ensure_cosine_collection(self) -> None:
+        metadata = self.collection.metadata or {}
+        if metadata.get("hnsw:space") == "cosine":
+            return
+        self._client.delete_collection(self._collection_name)
+        self.collection = self._client.create_collection(
+            name=self._collection_name,
+            embedding_function=self._embedding_fn,
+            metadata={"hnsw:space": "cosine"},
+        )
 
-    def _sync_chroma_index(self) -> None:
-        new_ids = {str(example.sample_id) for example in self.examples}
+    def _corpus_sync_metadata(self, fingerprint: str, count: int) -> dict:
+        return {
+            "corpus_fingerprint": fingerprint,
+            "example_count": count,
+            "embedding_model": self._embedding_model_name,
+        }
+
+    def _base_fingerprint(self) -> str:
+        return corpus_fingerprint(self._base_examples)
+
+    def _refresh_example_maps(self) -> None:
+        self.examples = [*self._base_examples, *self._extra_examples]
+        self._example_by_id = {example.sample_id: example for example in self.examples}
+
+    def _sync_chroma_base(self) -> None:
+        fingerprint = self._base_fingerprint()
+        count = len(self._base_examples)
+        metadata = self.collection.metadata or {}
+        if (
+            metadata.get("corpus_fingerprint") == fingerprint
+            and metadata.get("example_count") == count
+            and metadata.get("embedding_model") == self._embedding_model_name
+            and self.collection.count() == count
+        ):
+            self._refresh_example_maps()
+            return
+
         existing = self.collection.get()
         old_ids = set(existing["ids"]) if existing.get("ids") else set()
+        new_ids = {str(example.sample_id) for example in self._base_examples}
         to_remove = list(old_ids - new_ids)
         if to_remove:
             self.collection.delete(ids=to_remove)
-        if not self.examples:
+
+        if not self._base_examples:
+            self.collection.modify(
+                metadata=self._corpus_sync_metadata(fingerprint, 0),
+            )
+            self._refresh_example_maps()
             return
-        ids = [str(example.sample_id) for example in self.examples]
-        documents = [example.context for example in self.examples]
+
+        ids = [str(example.sample_id) for example in self._base_examples]
+        documents = [example.context for example in self._base_examples]
         metadatas = [
             {
                 "question": example.question or "",
                 "answer": example.answer or "",
                 "sample_id": int(example.sample_id),
             }
-            for example in self.examples
+            for example in self._base_examples
         ]
         self.collection.upsert(
             ids=ids,
             documents=documents,
             metadatas=metadatas,
         )
+        self.collection.modify(
+            metadata=self._corpus_sync_metadata(fingerprint, count),
+        )
+        self._refresh_example_maps()
+
+    def _sync_chroma_extras(self) -> None:
+        existing = self.collection.get()
+        old_extra_ids = [
+            doc_id
+            for doc_id in (existing.get("ids") or [])
+            if doc_id.startswith("-") and doc_id[1:].isdigit()
+        ]
+        if old_extra_ids:
+            self.collection.delete(ids=old_extra_ids)
+
+        if self._extra_examples:
+            ids = [str(example.sample_id) for example in self._extra_examples]
+            documents = [example.context for example in self._extra_examples]
+            metadatas = [
+                {
+                    "question": example.question or "",
+                    "answer": example.answer or "",
+                    "sample_id": int(example.sample_id),
+                }
+                for example in self._extra_examples
+            ]
+            self.collection.upsert(
+                ids=ids,
+                documents=documents,
+                metadatas=metadatas,
+            )
+        self._refresh_example_maps()
 
     def retrieve(
         self, query: str, top_k: int = 2
@@ -203,127 +278,13 @@ class NQRAG:
             )
 
         self._extra_context_files = context_files
-        self._set_examples([*self._base_examples, *extra_examples])
+        self._extra_examples = extra_examples
+        self._sync_chroma_extras()
 
 
 class RAGRequest(BaseModel):
     query: str
     contexts: list[str] | None = None
-
-
-def load_examples(path: Path) -> list[BenchmarkExample]:
-    examples: list[BenchmarkExample] = []
-    with path.open(encoding="utf-8") as file:
-        for line in file:
-            if not line.strip():
-                continue
-            row = json.loads(line)
-            sample_id = int(row["id"])
-            context = str(row.get("context", "")).strip()
-            if not context:
-                continue
-            examples.append(
-                BenchmarkExample(
-                    sample_id=sample_id,
-                    question=row["question"],
-                    answer=row["answer"],
-                    context=context,
-                )
-            )
-    return examples
-
-
-def load_nq_examples(config: Mapping[str, Any]) -> list[BenchmarkExample]:
-    dataset_name = str(config.get("name", "natural_questions")).strip()
-    split = str(config.get("split", "train")).strip()
-    try:
-        limit = int(config.get("limit", 2000))
-    except (TypeError, ValueError) as exc:
-        raise RuntimeError("nq_dataset.limit must be an integer") from exc
-    if limit <= 0:
-        raise RuntimeError("nq_dataset.limit must be greater than 0")
-    cache_dir_raw = config.get("cache_dir")
-    cache_dir = str(cache_dir_raw).strip() if isinstance(cache_dir_raw, str) else None
-
-    dataset = load_dataset(
-        dataset_name,
-        split=split,
-        streaming=True,
-        cache_dir=cache_dir or None,
-    )
-    examples: list[BenchmarkExample] = []
-    for index, row in enumerate(dataset, start=1):
-        question = _extract_question(row)
-        context = _extract_context(row)
-        answer = _extract_answer(row)
-        if not question or not context:
-            continue
-        examples.append(
-            BenchmarkExample(
-                sample_id=index,
-                question=question,
-                answer=answer,
-                context=context,
-            )
-        )
-        if len(examples) >= limit:
-            break
-    if not examples:
-        raise RuntimeError("could not load NQ examples with question+context")
-    return examples
-
-
-def _extract_question(row: Mapping[str, Any]) -> str:
-    question = row.get("question")
-    if isinstance(question, str):
-        return question.strip()
-    return ""
-
-
-def _extract_context(row: Mapping[str, Any]) -> str:
-    for key in ("context", "document_text", "passage", "text"):
-        value = row.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-
-    document = row.get("document")
-    if isinstance(document, Mapping):
-        for key in ("text", "document_text", "html"):
-            value = document.get(key)
-            if isinstance(value, str) and value.strip():
-                return value.strip()
-        tokens = document.get("tokens")
-        if isinstance(tokens, Mapping):
-            token_values = tokens.get("token")
-            if isinstance(token_values, list):
-                joined = " ".join(
-                    str(token).strip() for token in token_values if str(token).strip()
-                )
-                if joined:
-                    return joined
-    return ""
-
-
-def _extract_answer(row: Mapping[str, Any]) -> str:
-    answer = row.get("answer")
-    if isinstance(answer, str):
-        return answer.strip()
-    if isinstance(answer, list):
-        for item in answer:
-            if isinstance(item, str) and item.strip():
-                return item.strip()
-    annotations = row.get("annotations")
-    if isinstance(annotations, Mapping):
-        short_answers = annotations.get("short_answers")
-        if isinstance(short_answers, list):
-            for item in short_answers:
-                if isinstance(item, str) and item.strip():
-                    return item.strip()
-                if isinstance(item, Mapping):
-                    text = item.get("text")
-                    if isinstance(text, str) and text.strip():
-                        return text.strip()
-    return ""
 
 
 def create_app(rag: NQRAG, top_k: int) -> FastAPI:
