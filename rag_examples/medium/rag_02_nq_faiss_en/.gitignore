@@ -4,5 +4,5 @@ __pycache__/
 .ruff_cache/
 .venv/
 venv/
-chroma_data/
+faiss_data/
 poisoned_contexts/

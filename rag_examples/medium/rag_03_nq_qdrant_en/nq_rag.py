@@ -17,6 +17,9 @@ _MEDIUM_DIR = Path(__file__).resolve().parents[1]
 if str(_MEDIUM_DIR) not in sys.path:
     sys.path.insert(0, str(_MEDIUM_DIR))
 
+from common.native_retrieval import (  # noqa: E402
+    benchmark_example_from_retrieved_context,
+)
 from common.nq_loading import (  # noqa: E402
     BenchmarkExample,
     corpus_fingerprint,
@@ -235,6 +238,19 @@ class NQRAG:
         )
         self._refresh_example_maps()
 
+    def _example_for_qdrant_hit(
+        self, payload: Mapping[str, Any]
+    ) -> BenchmarkExample | None:
+        sample_id_raw = payload.get("sample_id")
+        if isinstance(sample_id_raw, int):
+            example = self._example_by_id.get(sample_id_raw)
+            if example is not None:
+                return example
+        context_raw = payload.get("context")
+        if isinstance(context_raw, str):
+            return benchmark_example_from_retrieved_context(context_raw)
+        return None
+
     def retrieve(
         self, query: str, top_k: int = 2
     ) -> list[tuple[BenchmarkExample, float]]:
@@ -242,7 +258,7 @@ class NQRAG:
         if not self.examples:
             return []
         query_embedding = self._encode_contexts([query])
-        n_results = min(top_k, len(self.examples))
+        n_results = min(top_k, max(len(self.examples), top_k))
         if hasattr(self._qdrant, "search"):
             hits = self._qdrant.search(
                 collection_name=self._collection_name,
@@ -261,13 +277,10 @@ class NQRAG:
         out: list[tuple[BenchmarkExample, float]] = []
         for hit in hits:
             payload = hit.payload or {}
-            sample_id_raw = payload.get("sample_id")
-            if not isinstance(sample_id_raw, int):
-                continue
-            example = self._example_by_id.get(sample_id_raw)
+            example = self._example_for_qdrant_hit(payload)
             if example is not None:
                 out.append((example, float(hit.score)))
-        return out
+        return out[:top_k]
 
     def answer_with_contexts(self, query: str, top_k: int = 2) -> tuple[str, list[str]]:
         if not self.llm_client:

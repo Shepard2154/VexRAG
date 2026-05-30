@@ -17,6 +17,9 @@ _MEDIUM_DIR = Path(__file__).resolve().parents[1]
 if str(_MEDIUM_DIR) not in sys.path:
     sys.path.insert(0, str(_MEDIUM_DIR))
 
+from common.native_retrieval import (  # noqa: E402
+    benchmark_example_from_retrieved_context,
+)
 from common.nq_loading import (  # noqa: E402
     BenchmarkExample,
     corpus_fingerprint,
@@ -103,6 +106,8 @@ class NQRAG:
         self._base_embeddings: np.ndarray | None = None
         self._index: faiss.IndexFlatIP | None = None
         self._ordered_ids: list[int] = []
+        self._poison_documents: dict[int, str] = {}
+        self._metadata_mtime: float = 0.0
         self.examples: list[BenchmarkExample] = []
         self._example_by_id: dict[int, BenchmarkExample] = {}
         self._sync_faiss_index()
@@ -140,6 +145,8 @@ class NQRAG:
             return False
         self._index = faiss.read_index(str(self._faiss_index_path))
         self._ordered_ids = [int(item) for item in ordered_ids]
+        self._poison_documents = self._load_poison_documents(metadata)
+        self._metadata_mtime = self._metadata_path.stat().st_mtime
         self._refresh_example_maps()
         return True
 
@@ -225,25 +232,93 @@ class NQRAG:
         self._index = faiss.IndexFlatIP(embeddings.shape[1])
         self._index.add(embeddings)
         self._persist_faiss_index()
+        if self._metadata_path.exists():
+            self._metadata_mtime = self._metadata_path.stat().st_mtime
+
+    def _load_poison_documents(self, metadata: Mapping[str, Any]) -> dict[int, str]:
+        raw_docs = metadata.get("poison_documents")
+        if not isinstance(raw_docs, dict):
+            return {}
+        out: dict[int, str] = {}
+        for key, value in raw_docs.items():
+            if not isinstance(value, str) or not value.strip():
+                continue
+            try:
+                out[int(key)] = value.strip()
+            except (TypeError, ValueError):
+                continue
+        return out
+
+    def _apply_faiss_disk_state(
+        self,
+        *,
+        ordered_ids: list[int],
+        poison_documents: dict[int, str],
+        index: faiss.IndexFlatIP,
+    ) -> None:
+        self._ordered_ids = ordered_ids
+        self._poison_documents = poison_documents
+        self._index = index
+        if self._metadata_path.exists():
+            self._metadata_mtime = self._metadata_path.stat().st_mtime
+
+    def _maybe_reload_native_poison(self) -> None:
+        if not self._metadata_path.exists() or not self._faiss_index_path.exists():
+            return
+        mtime = self._metadata_path.stat().st_mtime
+        if mtime <= self._metadata_mtime:
+            return
+        try:
+            metadata = json.loads(self._metadata_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return
+        ordered_ids_raw = metadata.get("ordered_ids")
+        if not isinstance(ordered_ids_raw, list):
+            return
+        try:
+            ordered_ids = [int(item) for item in ordered_ids_raw]
+        except (TypeError, ValueError):
+            return
+        try:
+            index = faiss.read_index(str(self._faiss_index_path))
+        except Exception:
+            return
+        if int(index.ntotal) != len(ordered_ids):
+            return
+        self._apply_faiss_disk_state(
+            ordered_ids=ordered_ids,
+            poison_documents=self._load_poison_documents(metadata),
+            index=index,
+        )
+
+    def _example_for_faiss_id(self, sample_id: int) -> BenchmarkExample | None:
+        example = self._example_by_id.get(sample_id)
+        if example is not None:
+            return example
+        poison_text = self._poison_documents.get(sample_id)
+        if poison_text is None:
+            return None
+        return benchmark_example_from_retrieved_context(poison_text)
 
     def retrieve(
         self, query: str, top_k: int = 2
     ) -> list[tuple[BenchmarkExample, float]]:
         self._reload_extra_contexts()
+        self._maybe_reload_native_poison()
         if not self.examples or self._index is None:
             return []
         query_embedding = self._encode_contexts([query])
-        n_results = min(top_k, len(self._ordered_ids))
-        scores, indices = self._index.search(query_embedding, n_results)
+        search_k = min(top_k, max(len(self._ordered_ids), top_k))
+        scores, indices = self._index.search(query_embedding, search_k)
         out: list[tuple[BenchmarkExample, float]] = []
         for score, idx in zip(scores[0], indices[0], strict=True):
             if idx < 0 or idx >= len(self._ordered_ids):
                 continue
             sample_id = self._ordered_ids[idx]
-            example = self._example_by_id.get(sample_id)
+            example = self._example_for_faiss_id(sample_id)
             if example is not None:
                 out.append((example, float(score)))
-        return out
+        return out[:top_k]
 
     def answer_with_contexts(self, query: str, top_k: int = 2) -> tuple[str, list[str]]:
         if not self.llm_client:

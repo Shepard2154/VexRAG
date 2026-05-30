@@ -207,3 +207,11 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
+# RAG example runtime artifacts (vector indexes, poison payloads from scans)
+rag_examples/**/faiss_data/
+rag_examples/**/qdrant_data/
+rag_examples/**/chroma_data/
+rag_examples/**/poisoned_contexts/
+rag_examples/**/poisonedrag_*.txt
+rag_examples/**/hijackrag_*.txt
+

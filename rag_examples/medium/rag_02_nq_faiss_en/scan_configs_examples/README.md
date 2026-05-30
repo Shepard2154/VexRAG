@@ -4,17 +4,20 @@ Start the target first: `python3 nq_rag.py` (from the parent directory). First r
 
 ## Recommended (Ollama)
 
-| Config | Models | Cases |
-|--------|--------|-------|
-| **`ollama-default.yaml`** | `llama3:8b`, `nomic-embed-text:latest` | Full NQ case set |
-| **`ollama-smoke.yaml`** | `llama3:8b` | 2 hijack + 1 poisoned |
+| Config | Models | Corpus poisoning | Cases |
+|--------|--------|------------------|-------|
+| **`ollama-default.yaml`** | `llama3:8b`, `nomic-embed-text:latest` | `file_text` → `../poisoned_contexts/` | Full NQ case set |
+| **`ollama-smoke.yaml`** | `llama3:8b` | `file_text` → `../poisoned_contexts/` | 2 hijack + 1 poisoned |
+| **`ollama-smoke-native-poisoner.yaml`** | `llama3:8b`, `all-MiniLM-L6-v2` (embed) | **Native FAISS** → `../faiss_data/` | 2 hijack + 1 poisoned |
 
 ```bash
 vx scan --config scan_configs_examples/ollama-default.yaml
 vx scan --config scan_configs_examples/ollama-smoke.yaml
+vx scan --config scan_configs_examples/ollama-smoke-native-poisoner.yaml
 ```
 
-Poison files are written under `../poisoned_contexts/` and indexed on the next target request.
+- **`ollama-smoke.yaml`** — VexRAG writes poison text files under `../poisoned_contexts/`; the target reloads and indexes them on the next request.
+- **`ollama-smoke-native-poisoner.yaml`** — VexRAG appends adversarial vectors directly to the FAISS index (`scan.corpus_poisoning.backend: faiss`). No poison files are required; the target reloads native poison from disk on retrieve.
 
 **Faster target:** `RAG_CONFIG=config.smoke.json python3 nq_rag.py` (local `benchmark.jsonl`, no HF download).
 

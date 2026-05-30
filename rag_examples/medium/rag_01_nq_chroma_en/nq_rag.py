@@ -15,6 +15,9 @@ _MEDIUM_DIR = Path(__file__).resolve().parents[1]
 if str(_MEDIUM_DIR) not in sys.path:
     sys.path.insert(0, str(_MEDIUM_DIR))
 
+from common.native_retrieval import (  # noqa: E402
+    benchmark_example_from_retrieved_context,
+)
 from common.nq_loading import (  # noqa: E402
     BenchmarkExample,
     corpus_fingerprint,
@@ -202,13 +205,28 @@ class NQRAG:
             )
         self._refresh_example_maps()
 
+    def _example_for_chroma_hit(
+        self,
+        doc_id: str,
+        document: str | None,
+    ) -> BenchmarkExample | None:
+        try:
+            example = self._example_by_id.get(int(doc_id))
+        except ValueError:
+            example = None
+        if example is not None:
+            return example
+        if isinstance(document, str):
+            return benchmark_example_from_retrieved_context(document)
+        return None
+
     def retrieve(
         self, query: str, top_k: int = 2
     ) -> list[tuple[BenchmarkExample, float]]:
         self._reload_extra_contexts()
         if not self.examples:
             return []
-        n_results = min(top_k, len(self.examples))
+        n_results = min(top_k, max(self.collection.count(), top_k))
         result = self.collection.query(
             query_texts=[query],
             n_results=n_results,
@@ -216,15 +234,20 @@ class NQRAG:
         out: list[tuple[BenchmarkExample, float]] = []
         ids_batch = result.get("ids") or []
         distances_batch = result.get("distances") or []
+        documents_batch = result.get("documents") or []
         if not ids_batch or not ids_batch[0]:
             return out
-        for doc_id, distance in zip(ids_batch[0], distances_batch[0], strict=True):
-            example = self._example_by_id.get(int(doc_id))
+        documents = documents_batch[0] if documents_batch else []
+        for index, (doc_id, distance) in enumerate(
+            zip(ids_batch[0], distances_batch[0], strict=True)
+        ):
+            document = documents[index] if index < len(documents) else None
+            example = self._example_for_chroma_hit(doc_id, document)
             if example is None:
                 continue
             sim = 1.0 - float(distance)
             out.append((example, sim))
-        return out
+        return out[:top_k]
 
     def answer_with_contexts(self, query: str, top_k: int = 2) -> tuple[str, list[str]]:
         if not self.llm_client:

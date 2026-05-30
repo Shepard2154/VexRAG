@@ -35,24 +35,42 @@ def _assert_ntotal_matches(index: Any, ordered_ids: Sequence[int]) -> None:
         )
 
 
-def _read_faiss_corpus_state(
-    index_path: Path,
-    metadata_path: Path,
-    faiss: Any,
-) -> tuple[Any, list[int]]:
-    try:
-        index = faiss.read_index(str(index_path))
-    except Exception as exc:
-        raise CorpusPoisoningError(f"could not read faiss index: {exc}") from exc
+def _read_faiss_metadata(metadata_path: Path) -> dict[str, Any]:
     try:
         raw_meta = json.loads(metadata_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise CorpusPoisoningError(
             f"could not read faiss metadata.json: {exc}"
         ) from exc
+    if not isinstance(raw_meta, dict):
+        raise CorpusPoisoningError("metadata.json must be a JSON object")
+    return raw_meta
+
+
+def _poison_documents_from_metadata(raw_meta: Mapping[str, Any]) -> dict[str, str]:
+    raw_docs = raw_meta.get("poison_documents")
+    if not isinstance(raw_docs, dict):
+        return {}
+    out: dict[str, str] = {}
+    for key, value in raw_docs.items():
+        if isinstance(key, str) and isinstance(value, str) and value.strip():
+            out[key] = value.strip()
+    return out
+
+
+def _read_faiss_corpus_state(
+    index_path: Path,
+    metadata_path: Path,
+    faiss: Any,
+) -> tuple[Any, list[int], dict[str, str]]:
+    try:
+        index = faiss.read_index(str(index_path))
+    except Exception as exc:
+        raise CorpusPoisoningError(f"could not read faiss index: {exc}") from exc
+    raw_meta = _read_faiss_metadata(metadata_path)
     ordered_ids = _ordered_ids_from_metadata(raw_meta)
     _assert_ntotal_matches(index, ordered_ids)
-    return index, ordered_ids
+    return index, ordered_ids, _poison_documents_from_metadata(raw_meta)
 
 
 def _persist_faiss_corpus(
@@ -62,15 +80,28 @@ def _persist_faiss_corpus(
     ordered_ids: list[int],
     faiss: Any,
     *,
+    poison_documents: Mapping[str, str] | None = None,
     os_error_message: str,
 ) -> None:
     index_tmp = index_path.with_name(f".{index_path.name}.tmp")
     metadata_tmp = metadata_path.with_name(f".{metadata_path.name}.tmp")
     index_backup = index_path.with_name(f".{index_path.name}.bak")
     metadata_backup = metadata_path.with_name(f".{metadata_path.name}.bak")
-    metadata_payload = json.dumps(
-        {"ordered_ids": ordered_ids}, ensure_ascii=False, indent=2
-    )
+    existing_meta: dict[str, Any] = {}
+    if metadata_path.is_file():
+        try:
+            loaded = json.loads(metadata_path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                existing_meta = loaded
+        except (OSError, json.JSONDecodeError):
+            existing_meta = {}
+    metadata_payload_dict: dict[str, Any] = {
+        **existing_meta,
+        "ordered_ids": ordered_ids,
+    }
+    if poison_documents is not None:
+        metadata_payload_dict["poison_documents"] = dict(poison_documents)
+    metadata_payload = json.dumps(metadata_payload_dict, ensure_ascii=False, indent=2)
 
     def _fsync_dir(path: Path) -> None:
         dir_fd = os.open(str(path.parent), os.O_RDONLY)
@@ -219,7 +250,7 @@ class FaissPoisoner:
         faiss = self._faiss
 
         self._require_corpus_files(detail_path=True)
-        index, ordered_ids = _read_faiss_corpus_state(
+        index, ordered_ids, poison_documents = _read_faiss_corpus_state(
             self._index_path, self._metadata_path, faiss
         )
 
@@ -233,12 +264,13 @@ class FaissPoisoner:
 
         new_ids: list[str] = []
         id_ints: list[int] = []
-        for _ in stripped:
+        for text in stripped:
             self._next_poison_id -= 1
             pid_int = self._next_poison_id
             id_ints.append(pid_int)
             sid = str(pid_int)
             new_ids.append(sid)
+            poison_documents[sid] = text
             self._owned_ids.add(sid)
 
         try:
@@ -255,6 +287,7 @@ class FaissPoisoner:
             index,
             ordered_ids,
             faiss,
+            poison_documents=poison_documents,
             os_error_message="could not persist faiss index",
         )
         return tuple(new_ids)
@@ -272,11 +305,16 @@ class FaissPoisoner:
         np = self._np
 
         self._require_corpus_files(detail_path=False)
-        index, ordered_ids = _read_faiss_corpus_state(
+        index, ordered_ids, poison_documents = _read_faiss_corpus_state(
             self._index_path, self._metadata_path, faiss
         )
 
         remove_int = {int(x) for x in to_remove}
+        updated_poison_documents = {
+            key: value
+            for key, value in poison_documents.items()
+            if key not in to_remove
+        }
         new_index, keep_ids = _rebuild_index_without_point_ids(
             index,
             ordered_ids,
@@ -290,6 +328,7 @@ class FaissPoisoner:
             new_index,
             keep_ids,
             faiss,
+            poison_documents=updated_poison_documents,
             os_error_message="could not persist faiss index after delete",
         )
 
