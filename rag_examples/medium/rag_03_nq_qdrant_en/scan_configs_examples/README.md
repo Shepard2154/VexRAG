@@ -9,15 +9,18 @@ Start the target first: `python3 nq_rag.py` (from the parent directory). First r
 | **`ollama-default.yaml`** | `llama3:8b`, `nomic-embed-text:latest` | `file_text` → `../poisoned_contexts/` | Full NQ case set |
 | **`ollama-smoke.yaml`** | `llama3:8b` | `file_text` → `../poisoned_contexts/` | 2 hijack + 1 poisoned |
 | **`ollama-smoke-native-poisoner.yaml`** | `llama3:8b`, `all-MiniLM-L6-v2` (embed) | **Native Qdrant** → `../qdrant_data/` | 2 hijack + 1 poisoned |
+| **`ollama-smoke-native-poisoner-server.yaml`** | same | **Native Qdrant server** (`qdrant.url`) | 2 hijack + 1 poisoned |
 
 ```bash
 vx scan --config scan_configs_examples/ollama-default.yaml
 vx scan --config scan_configs_examples/ollama-smoke.yaml
 vx scan --config scan_configs_examples/ollama-smoke-native-poisoner.yaml
+vx scan --config scan_configs_examples/ollama-smoke-native-poisoner-server.yaml
 ```
 
 - **`ollama-smoke.yaml`** — VexRAG writes poison text files under `../poisoned_contexts/`; the target reloads and indexes them on the next request.
-- **`ollama-smoke-native-poisoner.yaml`** — VexRAG upserts adversarial points directly into the Qdrant collection (`scan.corpus_poisoning.backend: qdrant`). No poison files are required; the target reads poison hits from the same DB path/collection as in `config.smoke.json`.
+- **`ollama-smoke-native-poisoner.yaml`** — VexRAG upserts adversarial points directly into the Qdrant collection (`scan.corpus_poisoning.backend: qdrant`). No poison files are required; the target reads poison hits from the same DB path/collection as in `config.smoke.json`. Use only when the RAG target is the sole owner of the embedded `qdrant_data/` path.
+- **`ollama-smoke-native-poisoner-server.yaml`** — same native upsert, but via `qdrant.url` (Qdrant server). Start the target with `QDRANT_URL` pointing at the same server when VexRAG and the target run concurrently.
 
 **Faster target:** `RAG_CONFIG=config.smoke.json python3 nq_rag.py` (local `benchmark.jsonl`, no HF download).
 

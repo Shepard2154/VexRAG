@@ -58,6 +58,7 @@ testpaths = ["tests"]
 pythonpath = ["."]
 markers = [
     "integration: wiring tests without real network",
+    "e2e: full vx scan against rag_examples (Ollama + live RAG target)",
     "slow: long-running tests (optional profile)",
 ]
 
@@ -130,14 +131,18 @@ help = "Editable install with dev extras (run after cloning)"
 shell = "pip install -e \".[dev]\""
 
 [tool.poe.tasks.test]
-cmd = "pytest tests/unit -q"
+cmd = "pytest tests -m \"not integration and not e2e\" -q"
 
 [tool.poe.tasks.test-integration]
-cmd = "pytest tests/integration -m integration -q"
+cmd = "pytest tests -m integration -q"
+
+[tool.poe.tasks.test-e2e]
+help = "Full vx scan smoke tests against rag_examples (requires Ollama + RAG deps)"
+cmd = "pytest tests/e2e -m e2e -q"
 
 [tool.poe.tasks.cov]
 help = "Unit tests with coverage (term-missing + XML)"
-cmd = "pytest tests/unit --cov=vexrag --cov-report=term-missing --cov-report=xml -q"
+cmd = "pytest tests -m \"not integration and not e2e\" --cov=vexrag --cov-report=term-missing --cov-report=xml -q"
 
 [tool.poe.tasks.cov-all]
 help = "Full test suite with coverage (term-missing + HTML)"

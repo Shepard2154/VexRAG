@@ -88,6 +88,7 @@ class NQRAG:
         embedding_device: str,
         llm_client: LLMClient | None = None,
         extra_contexts_dir: Path | None = None,
+        qdrant_url: str | None = None,
     ) -> None:
         self._base_examples = list(examples)
         self._extra_examples: list[BenchmarkExample] = []
@@ -99,7 +100,10 @@ class NQRAG:
         self._collection_name = collection_name
         self._metadata_path = self._qdrant_dir / "index_metadata.json"
         self._embedding_model_name = embedding_model
-        self._qdrant = QdrantClient(path=str(self._qdrant_dir))
+        if qdrant_url:
+            self._qdrant = QdrantClient(url=qdrant_url.strip())
+        else:
+            self._qdrant = QdrantClient(path=str(self._qdrant_dir))
         self._embedding_model = SentenceTransformer(
             embedding_model,
             device=embedding_device,
@@ -399,6 +403,8 @@ def apply_env_overrides(config: dict) -> dict:
         config["qdrant_collection"] = qdrant_collection
     if embedding_device := os.getenv("EMBEDDING_DEVICE"):
         config["embedding_device"] = embedding_device
+    if qdrant_url := os.getenv("QDRANT_URL"):
+        config["qdrant_url"] = qdrant_url
     return config
 
 
@@ -436,6 +442,7 @@ if isinstance(nq_dataset_config, Mapping) and bool(
     _examples = load_nq_examples(nq_dataset_config)
 else:
     _examples = load_examples(DEFAULT_DATASET)
+_qdrant_url = CONFIG.get("qdrant_url")
 _rag = NQRAG(
     _examples,
     qdrant_dir=DEFAULT_QDRANT_DIR,
@@ -444,6 +451,7 @@ _rag = NQRAG(
     embedding_device=DEFAULT_EMBEDDING_DEVICE,
     llm_client=LLM_CLIENT,
     extra_contexts_dir=DEFAULT_POISON_DIR,
+    qdrant_url=str(_qdrant_url).strip() if _qdrant_url else None,
 )
 app = create_app(_rag, top_k=DEFAULT_TOP_K)
 
