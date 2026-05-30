@@ -1,6 +1,6 @@
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 from vexrag.usecases.errors import UseCaseConfigError
 
@@ -39,14 +39,13 @@ def dump_yaml(content: Mapping[str, Any]) -> str:
         import yaml
     except ImportError as exc:
         raise UseCaseConfigError("PyYAML is required to write YAML files") from exc
-    return cast(
-        str,
-        yaml.safe_dump(
-            content,
-            allow_unicode=True,
-            sort_keys=False,
-        ),
+    dumped = yaml.safe_dump(
+        content,
+        allow_unicode=True,
+        sort_keys=False,
     )
+    assert isinstance(dumped, str)
+    return dumped
 
 
 def write_yaml(path: Path, content: Mapping[str, Any]) -> None:
