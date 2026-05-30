@@ -1,7 +1,7 @@
 import uuid
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from vexrag.core.llm.contracts import EmbeddingClient
 
@@ -90,11 +90,12 @@ class ChromaPoisoner:
         for pid in ids:
             self._owned_ids.add(pid)
         try:
+            # Chroma Collection.add stubs disagree with our embed/metadata payloads.
             self._collection.add(
                 ids=ids,
-                embeddings=vectors,  # type: ignore[arg-type]  # chromadb stubs vs list[list[float]]
+                embeddings=cast(Any, vectors),
                 documents=stripped,
-                metadatas=metadatas,  # type: ignore[arg-type]  # chromadb Metadata typing
+                metadatas=cast(Any, metadatas),
             )
         except Exception as exc:
             for pid in ids:
