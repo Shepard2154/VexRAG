@@ -8,11 +8,11 @@ from vexrag.core.evaluation.errors import (
 )
 
 
-def _dot_product(left_vector, right_vector):
+def _dot_product(left_vector: Sequence[float], right_vector: Sequence[float]) -> float:
     return sum(a * b for a, b in zip(left_vector, right_vector, strict=True))
 
 
-def _l2_norm(vector):
+def _l2_norm(vector: Sequence[float]) -> float:
     return sqrt(sum(value * value for value in vector))
 
 

@@ -1,5 +1,5 @@
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, cast
 
 
 class JSONGenerationLLMClientAdapter:
@@ -13,4 +13,4 @@ class JSONGenerationLLMClientAdapter:
         return str(getattr(self.client, "model", getattr(self.client, "model_id", "")))
 
     def complete_json(self, prompt: str) -> str | Mapping[str, Any]:
-        return self.client.complete_json(prompt)
+        return cast(str | Mapping[str, Any], self.client.complete_json(prompt))

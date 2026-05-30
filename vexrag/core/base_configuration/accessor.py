@@ -1,6 +1,6 @@
 from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 from vexrag.core.exceptions import ConfigurationError
 
@@ -50,11 +50,14 @@ class ConfigAccessor:
     ) -> _Number:
         message_on_type_mismatch = f"{field_path} must be {cast_to.__name__}"
         _reject_bool(raw_value, message_on_type_mismatch, self._error)
-        return _safe_cast(
-            raw_value,
-            cast_to,
-            message_on_type_mismatch,
-            self._error,
+        return cast(
+            _Number,
+            _safe_cast(
+                raw_value,
+                cast_to,
+                message_on_type_mismatch,
+                self._error,
+            ),
         )
 
     def _get_number(

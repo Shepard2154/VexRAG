@@ -8,7 +8,6 @@ from vexrag.attack_algorithms.poison_base.contracts import (
     CorpusPoisonGenerator,
     CorpusPoisonRequest,
     RequestT,
-    ResultT,
 )
 from vexrag.attack_algorithms.poison_base.profile import CorpusPoisonScanProfile
 from vexrag.attack_algorithms.poison_base.report import (
@@ -24,14 +23,14 @@ from vexrag.core.scan.types import ScanVerdict
 from vexrag.core.target_systems import TargetSystemAdapter
 
 
-class CorpusPoisonScanRunner(Generic[RequestT, ResultT]):
+class CorpusPoisonScanRunner(Generic[RequestT]):
     """Orchestrates corpus-poison generation and target-system checks."""
 
     def __init__(
         self,
         *,
         profile: CorpusPoisonScanProfile,
-        generator: CorpusPoisonGenerator[RequestT],
+        generator: CorpusPoisonGenerator,
         target_system: TargetSystemAdapter,
         evaluator: Evaluator,
         corpus_poisoner: CorpusPoisoner | None = None,
@@ -55,7 +54,7 @@ class CorpusPoisonScanRunner(Generic[RequestT, ResultT]):
             raise ValueError(self._profile.empty_requests_error)
 
         cases: list[CorpusPoisonCaseResult] = []
-        generated_results: list[ResultT] = []
+        generated_results: list[CorpusPoisonGenerationResult] = []
         for case_index, request in enumerate(requests, start=1):
             case_label = request.case_id or f"#{case_index}"
             self._logger.info(
@@ -85,7 +84,7 @@ class CorpusPoisonScanRunner(Generic[RequestT, ResultT]):
 
     def _run_cases(
         self,
-        generated: ResultT,
+        generated: CorpusPoisonGenerationResult,
         request: RequestT,
         case_index: int,
         config: CorpusPoisonScanConfig,
@@ -170,7 +169,7 @@ class CorpusPoisonScanRunner(Generic[RequestT, ResultT]):
 
     def _build_report(
         self,
-        generated_results: tuple[ResultT, ...],
+        generated_results: tuple[CorpusPoisonGenerationResult, ...],
         cases: tuple[CorpusPoisonCaseResult, ...],
         config: CorpusPoisonScanConfig,
     ) -> CorpusPoisonScanReport:

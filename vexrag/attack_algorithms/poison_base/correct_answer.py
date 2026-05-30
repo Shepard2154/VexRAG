@@ -1,7 +1,11 @@
 from collections.abc import Callable
 from typing import Any
 
-from vexrag.core.attack_configurator import CorrectAnswerProvider, TargetStyle
+from vexrag.core.attack_configurator import (
+    CorrectAnswerProvider,
+    CorrectAnswerSource,
+    TargetStyle,
+)
 from vexrag.core.llm import JsonCompletionClient, build_correct_answer_prompt
 
 
@@ -15,7 +19,7 @@ def resolve_correct_answer(
     llm_client: JsonCompletionClient,
     validate_payload: Callable[[Any], str],
     warnings: list[str],
-) -> tuple[str, str]:
+) -> tuple[str, CorrectAnswerSource]:
     """Resolve correct_answer and its source using one of: provided, target-system, or LLM fallback."""
     if provided_answer and provided_answer.strip():
         return provided_answer.strip(), "provided"

@@ -6,13 +6,26 @@ from vexrag.core.target_systems.types import TargetSystemResponse
 
 
 class ScanCaseReport(Protocol):
-    query: str
-    adversarial_texts: tuple[str, ...]
-    expected_incorrect_answer: str
-    system_response: TargetSystemResponse
-    evaluation: EvaluationResult
-    case_id: str | None
-    run_index: int
+    @property
+    def query(self) -> str: ...
+
+    @property
+    def adversarial_texts(self) -> tuple[str, ...]: ...
+
+    @property
+    def expected_incorrect_answer(self) -> str: ...
+
+    @property
+    def system_response(self) -> TargetSystemResponse: ...
+
+    @property
+    def evaluation(self) -> EvaluationResult: ...
+
+    @property
+    def case_id(self) -> str | None: ...
+
+    @property
+    def run_index(self) -> int: ...
 
     @property
     def successful(self) -> bool: ...
@@ -26,9 +39,14 @@ class ScanVerdictValue(Protocol):
 
 
 class ScanReport(Protocol):
-    verdict: ScanVerdictValue
-    cases: tuple[ScanCaseReport, ...]
-    warnings: tuple[str, ...]
+    @property
+    def verdict(self) -> ScanVerdictValue: ...
+
+    @property
+    def cases(self) -> tuple[ScanCaseReport, ...]: ...
+
+    @property
+    def warnings(self) -> tuple[str, ...]: ...
 
     @property
     def success_rate(self) -> float: ...

@@ -7,10 +7,17 @@ from urllib.request import Request, urlopen
 
 from vexrag.core.target_systems.errors import TargetSystemAdapterError
 from vexrag.core.target_systems.types import (
+    HTTPResponsePaths,
     HTTPTargetSystemAdapterConfig,
     TargetSystemQuery,
     TargetSystemResponse,
 )
+
+
+def _response_paths(config: HTTPTargetSystemAdapterConfig) -> HTTPResponsePaths:
+    paths = config.response_paths
+    assert isinstance(paths, HTTPResponsePaths)
+    return paths
 
 
 class HTTPTargetSystemAdapter:
@@ -89,13 +96,13 @@ class HTTPTargetSystemAdapter:
             ) from error
 
     def _extract_answer(self, payload: Any) -> str:
-        value = self._extract_path(payload, self.config.response_paths.answer)
+        value = self._extract_path(payload, _response_paths(self.config).answer)
         if value is None:
             raise TargetSystemAdapterError("response answer path resolved to null")
         return str(value)
 
     def _extract_contexts(self, payload: Any) -> tuple[str, ...]:
-        path = self.config.response_paths.contexts
+        path = _response_paths(self.config).contexts
         if path is None:
             return ()
         value = self._extract_path(payload, path)

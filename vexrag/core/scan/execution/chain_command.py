@@ -1,6 +1,6 @@
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from vexrag.core.scan.contracts import ScanCaseReport, ScanCommand, ScanReport
 from vexrag.core.scan.types import ScanVerdict
@@ -83,7 +83,7 @@ class AttackChainScanCommand:
         self,
         *,
         on_case_complete: Callable[[ScanCaseReport], None] | None = None,
-    ) -> AttackChainScanReport:
+    ) -> ScanReport:
         step_reports: list[tuple[str, ScanReport]] = []
         flat_cases: list[ScanCaseReport] = []
         warn: list[str] = []
@@ -107,7 +107,7 @@ class AttackChainScanCommand:
                     step_index=_sid,
                     attack_id=_aid,
                 )
-                on_case_complete(labeled)
+                on_case_complete(cast(ScanCaseReport, labeled))
 
             report = command.run(
                 on_case_complete=(
@@ -116,24 +116,30 @@ class AttackChainScanCommand:
             )
             step_reports.append((attack_id, report))
             warn.extend(report.warnings)
-            if report.verdict is ScanVerdict.VULNERABLE:
+            if report.verdict.value == ScanVerdict.VULNERABLE:
                 any_vulnerable = True
             for case in report.cases:
                 flat_cases.append(
-                    _ChainLabeledCase(
-                        case,
-                        step_index=step_index,
-                        attack_id=attack_id,
+                    cast(
+                        ScanCaseReport,
+                        _ChainLabeledCase(
+                            case,
+                            step_index=step_index,
+                            attack_id=attack_id,
+                        ),
                     )
                 )
         verdict = (
             ScanVerdict.VULNERABLE if any_vulnerable else ScanVerdict.NOT_VULNERABLE
         )
-        return AttackChainScanReport(
-            step_reports=tuple(step_reports),
-            verdict=verdict,
-            cases=tuple(flat_cases),
-            warnings=tuple(dict.fromkeys(warn)),
+        return cast(
+            ScanReport,
+            AttackChainScanReport(
+                step_reports=tuple(step_reports),
+                verdict=verdict,
+                cases=tuple(flat_cases),
+                warnings=tuple(dict.fromkeys(warn)),
+            ),
         )
 
 

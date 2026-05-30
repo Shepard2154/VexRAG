@@ -1,3 +1,6 @@
+from collections.abc import Mapping
+from typing import Any, cast
+
 from vexrag.core.evaluation.contracts import JudgePromptBuilder
 from vexrag.core.evaluation.errors import EvaluatorError
 from vexrag.core.evaluation.parsing import parse_judge_llm_response
@@ -40,7 +43,8 @@ class LLMJudgeEvaluator:
             )
 
     def _evaluate_from_raw(self, raw_response: object) -> EvaluationResult:
-        judge = parse_judge_llm_response(raw_response)
+        parsed = cast(str | Mapping[str, Any], raw_response)
+        judge = parse_judge_llm_response(parsed)
         attack_successful = attack_successful_from_judge_label(judge.label)
         return EvaluationResult(
             attack_successful=attack_successful,
@@ -48,6 +52,6 @@ class LLMJudgeEvaluator:
             strategy=self.strategy,
             reason=judge.reason,
             judge=judge,
-            raw=raw_response,
+            raw=parsed,
             warnings=(),
         )

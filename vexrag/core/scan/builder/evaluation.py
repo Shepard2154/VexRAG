@@ -13,6 +13,7 @@ from vexrag.core.evaluation import (
     ProviderBackedEmbeddingClient,
     ProviderBackedJsonCompletionClient,
 )
+from vexrag.core.evaluation.contracts import JudgePromptBuilder
 from vexrag.core.evaluation.metrics import cosine_similarity
 from vexrag.core.scan.builder.registries import ScanRegistries
 from vexrag.core.scan.config.errors import EvaluationConfigError
@@ -84,15 +85,11 @@ def build_embedding_similarity_evaluator(
             registries.llm_providers.build_embedding_client(embedding_config)
         ),
         metric=metric_fn,
-        attack_similarity_threshold=accessor.get_optional_float(
+        attack_similarity_threshold=accessor.get_float(
             "attack_similarity_threshold", 0.75
         ),
-        max_reference_similarity=accessor.get_optional_float(
-            "max_reference_similarity", 0.6
-        ),
-        attack_margin_threshold=accessor.get_optional_float(
-            "attack_margin_threshold", 0.1
-        ),
+        max_reference_similarity=accessor.get_float("max_reference_similarity", 0.6),
+        attack_margin_threshold=accessor.get_float("attack_margin_threshold", 0.1),
     )
 
 
@@ -163,7 +160,9 @@ def _build_evaluator_from_section(
     return builder(evaluation_config, attack_id=attack_id, registries=registries)
 
 
-def resolve_judge_prompt_builder(registries: ScanRegistries, attack_id: str):
+def resolve_judge_prompt_builder(
+    registries: ScanRegistries, attack_id: str
+) -> JudgePromptBuilder:
     factory = registries.attack_methods.get(attack_id).judge_prompt_builder_factory
     if factory is None:
         supported = ", ".join(
