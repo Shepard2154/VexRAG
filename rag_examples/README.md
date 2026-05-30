@@ -5,8 +5,7 @@ Self-contained sample RAG targets for onboarding and evaluation with VexRAG.
 | Tier | Examples | Scan configs |
 |------|----------|--------------|
 | **small** | `small/rag_01_in_memory_en` | `ollama-default.yaml`, `ollama-smoke.yaml` |
-| **medium** | NQ + Chroma / FAISS / Qdrant | Same layout per example |
-| **huge** | StackOverflow ingest scripts only (no `vx scan` target yet) |
+| **medium** | NQ + Chroma / FAISS / Qdrant | `ollama-default.yaml`, `ollama-smoke.yaml`, `ollama-smoke-native-poisoner.yaml` |
 
 **Quick start:** run the target (`python3 small_rag.py` or `python3 nq_rag.py`), then:
 
