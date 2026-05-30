@@ -6,3 +6,4 @@ __pycache__/
 venv/
 qdrant_data/
 poisoned_contexts/
+scan_configs_examples/.e2e-qdrant-server.yaml

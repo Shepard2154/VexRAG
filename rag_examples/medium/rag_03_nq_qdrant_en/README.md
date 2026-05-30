@@ -17,6 +17,7 @@ python3 nq_rag.py
 ```
 
 Embeddings and vectors are stored under `qdrant_data/` (created on first run). Override with `QDRANT_DIR`.
+Use embedded storage (`QdrantClient(path=...)`) when a single process owns the index. Set `QDRANT_URL` (e.g. `http://127.0.0.1:6333`) when VexRAG native corpus poisoning runs against the same Qdrant server in parallel with this target.
 Poison payload files are written into `poisoned_contexts/` and then indexed into the same Qdrant collection.
 
 Default service URL: `http://localhost:8080`  
