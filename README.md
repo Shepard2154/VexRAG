@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.png" alt="VexRAG" width="300">
+  <img src="https://raw.githubusercontent.com/Shepard2154/VexRAG/v0.2.1/assets/logo.png" alt="VexRAG" width="300">
 </p>
 
 <p align="center">
