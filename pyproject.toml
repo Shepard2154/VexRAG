@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vexrag"
-version = "0.1.3"
+version = "0.2.0"
 description = "A Red Team framework that evaluates RAG functional correctness when the retrieval backend contains poisoned passages."
 readme = "README.md"
 requires-python = ">=3.11"
