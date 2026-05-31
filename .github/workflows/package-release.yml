@@ -46,4 +46,4 @@ jobs:
 
       - name: Publish to PyPI
         if: ${{ !contains(github.ref_name, '-') }}
-        uses: pypa/gh-action-publish-to-pypi@release/v1
+        uses: pypa/gh-action-pypi-publish@release/v1
