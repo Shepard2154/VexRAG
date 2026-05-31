@@ -1,4 +1,4 @@
-name: CI
+name: lint-typecheck-test
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   pull_request:
 
 jobs:
-  check-and-test:
+  lint-typecheck-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
