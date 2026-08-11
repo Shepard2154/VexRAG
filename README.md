@@ -9,6 +9,13 @@
   <a href="https://t.me/vexrag"><img src="https://img.shields.io/badge/chat-join-blue?style=flat-square&logo=telegram" alt="Telegram chat" height="28"></a>
 </p>
 
+> **Note:** This repository represents the initial AI‑assisted prototype — a working proof of concept that validated the core idea.
+>
+> Building on that foundation, I am now performing a **manual rewrite** with Test‑Driven Development in a separate repository to elevate the codebase to production standards with full test coverage and long‑term maintainability.
+>
+> **Track the rewrite:** [github.com/Shepard2154/vexrag-tdd](https://github.com/Shepard2154/vexrag-tdd)
+
+
 Most RAG security tools focus on jailbreaking or prompt injection. VexRAG is different: it injects poisoned passages directly into the retrieval index and measures the system’s answer functional correctness under adversarial data manipulation.
 
 ## Threat model — when to use VexRAG
